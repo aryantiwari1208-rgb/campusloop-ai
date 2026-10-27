@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CampusLoop AI</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #f5f7fb;
+      color: #17233c;
+    }
+
+    header {
+      background: #122344;
+      color: white;
+      padding: 22px 7%;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 14px;
+    }
+
+    header h1 {
+      margin: 0;
+      font-size: 25px;
+    }
+
+    header span {
+      color: #72e2c0;
+    }
+
+    .hero {
+      padding: 48px 7%;
+      background: linear-gradient(120deg, #172e55, #2563a8);
+      color: white;
+    }
+
+    .hero h2 {
+      font-size: clamp(28px, 5vw, 44px);
+      margin: 0 0 12px;
+    }
+
+    .hero p {
+      color: #dce8ff;
+      line-height: 1.6;
+    }
+
+    .search {
+      display: flex;
+      gap: 10px;
+      margin-top: 24px;
+      max-width: 650px;
+    }
+
+    input,
+    select,
+    button {
+      padding: 13px;
+      border-radius: 9px;
+      border: 1px solid #d6ddeb;
+      font-size: 15px;
+    }
+
+    .search input {
+      flex: 1;
+      min-width: 0;
+    }
+
+    button {
+      background: #087f68;
+      color: white;
+      border: 0;
+      cursor: pointer;
+      font-weight: bold;
+    }
+
+    button:hover {
+      background: #066b58;
+    }
+
+    main {
+      padding: 32px 7%;
+    }
+
+    .toolbar {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-bottom: 20px;
+    }
+
+    .toolbar h2 {
+      margin: 0;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 20px;
+    }
+
+    .card {
+      background: white;
+      border: 1px solid #e5eaf2;
+      border-radius: 15px;
+      overflow: hidden;
+      box-shadow: 0 4px 16px #17233c0a;
+    }
+
+    .picture {
+      height: 145px;
+      display: grid;
+      place-items: center;
+      font-size: 60px;
+      background: #e4edfa;
+    }
+
+    .details {
+      padding: 17px;
+    }
+
+    .details h3 {
+      margin: 0 0 9px;
+    }
+
+    .details p {
+      color: #65718a;
+      font-size: 14px;
+    }
+
+    .price {
+      font-size: 21px;
+      font-weight: bold;
+      margin: 15px 0;
+    }
+
+    .tag {
+      display: inline-block;
+      background: #e1f7ef;
+      color: #087f68;
+      padding: 5px 9px;
+      border-radius: 20px;
+      font-size: 12px;
+    }
+
+    .details button {
+      width: 100%;
+    }
+
+    .assistant {
+      background: white;
+      border: 1px solid #dce5f1;
+      border-radius: 15px;
+      padding: 22px;
+      margin-top: 32px;
+    }
+
+    .assistant h2 {
+      margin-top: 0;
+    }
+
+    #answer {
+      color: #087f68;
+      line-height: 1.6;
+    }
+
+    .loading {
+      color: #65718a;
+    }
+
+    .error {
+      color: #c0392b;
+    }
+
+    footer {
+      text-align: center;
+      color: #65718a;
+      padding: 25px;
+    }
+
+    @media (max-width: 480px) {
+      .search {
+        flex-direction: column;
+      }
+    }
+  </style>
+
+</head>
+
+<body>
+
+  <!-- ==========================================
+       HEADER
+  =========================================== -->
+
+  <header>
+
+```
+<h1>
+  Campus<span>Loop</span> AI
+</h1>
+
+<div>
+  Student Marketplace · Buy Smart, Reuse More
+</div>
+```
+
+  </header>
+
+  <!-- ==========================================
+       HERO
+  =========================================== -->
+
+  <section class="hero">
+
+```
+<h2>
+  Your campus. Your community.
+</h2>
+
+<p>
+  Discover affordable student essentials and give useful items a second life.
+</p>
+
+<div class="search">
+
+  <input
+    id="searchInput"
+    placeholder="Search books, calculators, lab coats..."
+  >
+
+  <button onclick="searchItems()">
+    Search
+  </button>
+
+</div>
+```
+
+  </section>
+
+  <!-- ==========================================
+       MAIN CONTENT
+  =========================================== -->
+
+  <main>
+
+```
+<div class="toolbar">
+
+  <h2>
+    Explore marketplace
+  </h2>
+
+  <select
+    id="category"
+    onchange="searchItems()"
+  >
+
+    <option value="All">
+      All categories
+    </option>
+
+    <option value="Books">
+      Books
+    </option>
+
+    <option value="Electronics">
+      Electronics
+    </option>
+
+    <option value="Lab">
+      Lab equipment
+    </option>
+
+  </select>
+
+</div>
+
+
+<!-- PRODUCTS -->
+
+<div
+  class="grid"
+  id="listings"
+></div>
+
+
+<!-- ==========================================
+     AI ASSISTANT
+=========================================== -->
+
+<section class="assistant">
+
+  <h2>
+    ✨ CampusLoop AI Assistant
+  </h2>
+
+  <p>
+    Ask for help finding the right student essentials.
+  </p>
+
+  <div class="search">
+
+    <input
+      id="aiInput"
+      placeholder="e.g. Find affordable engineering books"
+    >
+
+    <button onclick="askAI()">
+      Ask AI
+    </button>
+
+  </div>
+
+  <p id="answer">
+    Try asking about books, electronics, or lab equipment.
+  </p>
+
+</section>
+```
+
+  </main>
+
+  <!-- ==========================================
+       FOOTER
+  =========================================== -->
+
+  <footer>
+    CampusLoop AI · A smarter, more sustainable campus
+  </footer>
+
+  <!-- ==========================================
+       JAVASCRIPT
+  =========================================== -->
+
+  <script>
+
+    // ==========================================
+    // GLOBAL DATA
+    // ==========================================
+
+    let products = [];
+
+
+    // ==========================================
+    // LOAD PRODUCTS FROM EXPRESS BACKEND
+    // ==========================================
+
+    async function loadProducts() {
+
+      const container =
+        document.getElementById("listings");
+
+      container.innerHTML =
+        '<p class="loading">Loading CampusLoop listings...</p>';
+
+      try {
+
+        const response =
+          await fetch("/api/products");
+
+        if (!response.ok) {
+          throw new Error("Could not load products.");
+        }
+
+        const data =
+          await response.json();
+
+        products =
+          data.products || [];
+
+        displayProducts(products);
+
+      } catch (error) {
+
+        console.error("Product loading error:", error);
+
+        container.innerHTML =
+          '<p class="error">Unable to load listings. Make sure the CampusLoop server is running.</p>';
+
+      }
+    }
+
+
+    // ==========================================
+    // DISPLAY PRODUCTS
+    // ==========================================
+
+    function displayProducts(items) {
+
+      const container =
+        document.getElementById("listings");
+
+      container.innerHTML = "";
+
+
+      if (!items || items.length === 0) {
+
+        container.innerHTML =
+          "<p>No matching listings found. Try another search.";
+
+        return;
+      }
+
+
+      items.forEach(product => {
+
+        const card =
+          document.createElement("article");
+
+        card.className = "card";
+
+
+        card.innerHTML = `
+
+          <div class="picture">
+            ${product.icon}
+          </div>
+
+          <div class="details">
+
+            <span class="tag">
+              ${product.category}
+            </span>
+
+            <h3>
+              ${product.name}
+            </h3>
+
+            <p>
+              ${product.description}
+            </p>
+
+            <div class="price">
+              ₹${product.price}
+            </div>
+
+            <button
+              onclick="buyItem(${product.id})"
+            >
+              View / Buy
+            </button>
+
+          </div>
+
+        `;
+
+
+        container.appendChild(card);
+
+      });
+
+    }
+
+
+    // ==========================================
+    // SEARCH PRODUCTS THROUGH BACKEND
+    // ==========================================
+
+    async function searchItems() {
+
+      const query =
+        document
+          .getElementById("searchInput")
+          .value
+          .trim();
+
+      const category =
+        document
+          .getElementById("category")
+          .value;
+
+
+      const container =
+        document.getElementById("listings");
+
+      container.innerHTML =
+        '<p class="loading">Searching CampusLoop...</p>';
+
+
+      try {
+
+        const params =
+          new URLSearchParams();
+
+
+        if (query) {
+          params.append("q", query);
+        }
+
+
+        if (category !== "All") {
+          params.append("category", category);
+        }
+
+
+        const url =
+          "/api/products/search?" +
+          params.toString();
+
+
+        const response =
+          await fetch(url);
+
+
+        if (!response.ok) {
+          throw new Error("Search request failed.");
+        }
+
+
+        const data =
+          await response.json();
+
+
+        displayProducts(
+          data.products || []
+        );
+
+
+      } catch (error) {
+
+        console.error("Search error:", error);
+
+        container.innerHTML =
+          '<p class="error">Search failed. Please try again.</p>';
+
+      }
+
+    }
+
+
+    // ==========================================
+    // AI ASSISTANT
+    // ==========================================
+
+    async function askAI() {
+
+      const input =
+        document.getElementById("aiInput");
+
+      const answer =
+        document.getElementById("answer");
+
+
+      const question =
+        input.value.trim();
+
+
+      if (!question) {
+
+        answer.textContent =
+          "Type what you are looking for first.";
+
+        return;
+      }
+
+
+      answer.textContent =
+        "CampusLoop AI is thinking...";
+
+
+      try {
+
+        const response =
+          await fetch("/api/recommend", {
+
+            method: "POST",
+
+            headers: {
+              "Content-Type": "application/json"
+            },
+
+            body: JSON.stringify({
+              interest: question
+            })
+
+          });
+
+
+        const data =
+          await response.json();
+
+
+        if (!response.ok) {
+
+          throw new Error(
+            data.message ||
+            "AI request failed."
+          );
+
+        }
+
+
+        const recommendation =
+          data.recommendation;
+
+
+        if (!recommendation) {
+
+          throw new Error(
+            "No recommendation received."
+          );
+
+        }
+
+
+        answer.innerHTML = `
+
+          <strong>
+            Recommended for you:
+          </strong>
+
+          ${recommendation.event}
+
+          <br>
+
+          <small>
+            ${recommendation.reason}
+          </small>
+
+        `;
+
+
+      } catch (error) {
+
+        console.error(
+          "AI Assistant error:",
+          error
+        );
+
+        answer.textContent =
+          "CampusLoop AI could not process your request.";
+
+      }
+
+    }
+
+
+    // ==========================================
+    // VIEW / BUY
+    // ==========================================
+async function buyItem(productId) {
+
+    try {
+        const response = await fetch(`/api/products/${productId}`);
+        const data = await response.json();
+
+        if (!data.product) {
+            alert("Product not found.");
+            return;
+        }
+
+        const product = data.product;
+
+        document.getElementById("answer").innerHTML = `
+            <div style="
+                background: white;
+                padding: 25px;
+                border-radius: 15px;
+                margin-top: 20px;
+                box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+            ">
+
+                <h2>${product.icon} ${product.name}</h2>
+
+                <p>
+                    <strong>Category:</strong>
+                    ${product.category}
+                </p>
+
+                <p>
+                    <strong>Price:</strong>
+                    ₹${product.price}
+                </p>
+
+                <p>${product.description}</p>
+
+                <button
+                    onclick="contactSeller(${product.id})"
+                    style="
+                        padding: 12px 20px;
+                        border: none;
+                        border-radius: 8px;
+                        cursor: pointer;
+                        background: #2563eb;
+                        color: white;
+                        font-weight: bold;
+                    "
+                >
+                    Contact Seller
+                </button>
+
+            </div>
+        `;
+
+        document.getElementById("answer").scrollIntoView({
+            behavior: "smooth"
+        });
+
+    } catch (error) {
+
+        console.error(error);
+
+        alert("Unable to load product details.");
+    }
+}
+
+
+function contactSeller(productId) {
+
+    alert(
+        "Seller contact feature coming soon!\n\n" +
+        "Product ID: " + productId
+    );
+}
+
+    // ==========================================
+    // START CAMPUSLOOP
+    // ==========================================
+
+    loadProducts();
+
+  </script>
+
+</body>
+</html>
