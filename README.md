@@ -62,7 +62,7 @@ Setup
 
 1. Clone the repository:
    
-   git clone YOUR_GITHUB_REPOSITORY_URL
+   https://github.com/aryantiwari1208-rgb/campusloop-ai/tree/master
 
 2. Move into the project directory:
    
