@@ -194,6 +194,33 @@
         flex-direction: column;
       }
     }
+
+
+    .auth-nav { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .auth-nav button { padding: 10px 14px; }
+    .auth-nav .auth-secondary { background: transparent; border: 1px solid #9fb1cc; }
+    .auth-welcome { color: #dce8ff; font-size: 14px; }
+    .auth-modal { position: fixed; inset: 0; z-index: 10; display: grid; place-items: center; padding: 18px; background: #0b1730bb; }
+    .auth-modal[hidden] { display: none; }
+    .auth-panel { position: relative; width: min(100%, 430px); max-height: 90vh; overflow: auto; padding: 28px; border-radius: 16px; background: #fff; color: #17233c; box-shadow: 0 20px 60px #0004; }
+    .auth-panel h2 { margin: 0 36px 8px 0; }
+    .auth-panel > p { color: #65718a; margin-top: 0; }
+    .auth-close { position: absolute; top: 14px; right: 14px; padding: 7px 11px; background: #eef2f8; color: #17233c; }
+    .auth-tabs { display: flex; gap: 8px; margin: 18px 0; }
+    .auth-tabs button { flex: 1; }
+    .auth-tabs button[aria-pressed="false"] { background: #e9eef6; color: #17233c; }
+    .auth-form { display: grid; gap: 12px; }
+    .auth-form[hidden] { display: none; }
+    .auth-form label { display: grid; gap: 6px; font-size: 14px; font-weight: 600; }
+    .auth-form input { width: 100%; }
+    .auth-form button { margin-top: 4px; }
+    .auth-message { min-height: 22px; margin: 14px 0 0; line-height: 1.45; }
+    .auth-message.error { color: #b42318; }
+    .auth-message.success { color: #087f68; }
+    @media (max-width: 600px) {
+      header { align-items: flex-start; }
+      .auth-nav { width: 100%; }
+    }
   </style>
 
 </head>
@@ -215,6 +242,15 @@
   Student Marketplace · Buy Smart, Reuse More
 </div>
 ```
+
+
+
+  <nav class="auth-nav" aria-label="Account">
+    <span id="authWelcome" class="auth-welcome" hidden></span>
+    <button id="openLogin" class="auth-secondary" type="button">Log in</button>
+    <button id="openRegister" type="button">Sign up</button>
+    <button id="logoutButton" class="auth-secondary" type="button" hidden>Log out</button>
+  </nav>
 
   </header>
 
@@ -343,6 +379,43 @@
   <!-- ==========================================
        JAVASCRIPT
   =========================================== -->
+
+  <div id="authModal" class="auth-modal" role="presentation" hidden>
+    <section class="auth-panel" role="dialog" aria-modal="true" aria-labelledby="authTitle" tabindex="-1">
+      <button id="closeAuth" class="auth-close" type="button" aria-label="Close">✕</button>
+      <h2 id="authTitle">Log in to CampusLoop</h2>
+      <p>Use your student account to continue.</p>
+      <div id="authTabs" class="auth-tabs" role="group" aria-label="Account access">
+        <button id="loginTab" type="button" aria-pressed="true">Log in</button>
+        <button id="registerTab" type="button" aria-pressed="false">Sign up</button>
+      </div>
+      <form id="loginForm" class="auth-form" novalidate>
+        <label>Email
+          <input name="email" type="email" autocomplete="email" maxlength="254" required>
+        </label>
+        <label>Password
+          <input name="password" type="password" autocomplete="current-password" required>
+        </label>
+        <button type="submit">Log in</button>
+      </form>
+      <form id="registerForm" class="auth-form" novalidate hidden>
+        <label>Name
+          <input name="name" type="text" autocomplete="name" maxlength="80" required>
+        </label>
+        <label>Email
+          <input name="email" type="email" autocomplete="email" maxlength="254" required>
+        </label>
+        <label>Password (at least 8 characters)
+          <input name="password" type="password" autocomplete="new-password" minlength="8" maxlength="128" required>
+        </label>
+        <label>Confirm password
+          <input name="confirmPassword" type="password" autocomplete="new-password" minlength="8" maxlength="128" required>
+        </label>
+        <button type="submit">Create account</button>
+      </form>
+      <p id="authMessage" class="auth-message" role="status" aria-live="polite"></p>
+    </section>
+  </div>
 
   <script>
 
@@ -728,6 +801,117 @@ function contactSeller(productId) {
     // ==========================================
     // START CAMPUSLOOP
     // ==========================================
+
+    // ==========================================
+    // STUDENT AUTHENTICATION UI
+    // ==========================================
+
+    const authModal = document.getElementById("authModal");
+    const authMessage = document.getElementById("authMessage");
+    const loginForm = document.getElementById("loginForm");
+    const registerForm = document.getElementById("registerForm");
+    const authTabs = document.getElementById("authTabs");
+    let currentUser = null;
+
+    function setAuthUser(user) {
+      currentUser = user;
+      const welcome = document.getElementById("authWelcome");
+      welcome.textContent = user ? "Hi, " + user.name : "";
+      welcome.hidden = !user;
+      document.getElementById("openLogin").hidden = !!user;
+      document.getElementById("openRegister").hidden = !!user;
+      document.getElementById("logoutButton").hidden = !user;
+    }
+
+    function showAuth(mode) {
+      authModal.hidden = false;
+      authMessage.textContent = "";
+      authMessage.className = "auth-message";
+      authTabs.hidden = false;
+      loginForm.hidden = mode !== "login";
+      registerForm.hidden = mode !== "register";
+      document.getElementById("loginTab").setAttribute("aria-pressed", String(mode === "login"));
+      document.getElementById("registerTab").setAttribute("aria-pressed", String(mode === "register"));
+      document.getElementById("authTitle").textContent = mode === "login" ? "Log in to CampusLoop" : "Create your CampusLoop account";
+      (mode === "login" ? loginForm : registerForm).querySelector("input").focus();
+    }
+
+    function closeAuth() { authModal.hidden = true; }
+
+    function showAuthMessage(message, kind) {
+      authMessage.textContent = message;
+      authMessage.className = "auth-message " + (kind || "");
+    }
+
+    async function submitAuth(event) {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const mode = form.id === "registerForm" ? "register" : "login";
+      const values = Object.fromEntries(new FormData(form).entries());
+      if (mode === "register" && values.password !== values.confirmPassword) {
+        showAuthMessage("Passwords do not match.", "error");
+        return;
+      }
+      const submitButton = form.querySelector("button[type=submit]");
+      submitButton.disabled = true;
+      showAuthMessage("Please wait…", "");
+      try {
+        const response = await fetch("/api/auth/" + mode, {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(values)
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.message || "Authentication failed.");
+        setAuthUser(data.user);
+        form.reset();
+        loginForm.hidden = true;
+        registerForm.hidden = true;
+        authTabs.hidden = true;
+        showAuthMessage(data.message || "You are signed in.", "success");
+      } catch (error) {
+        showAuthMessage(error.message || "Authentication failed. Please try again.", "error");
+      } finally {
+        submitButton.disabled = false;
+      }
+    }
+
+    async function refreshAuthState() {
+      try {
+        const response = await fetch("/api/auth/me", { credentials: "same-origin" });
+        if (response.ok) setAuthUser((await response.json()).user);
+        else setAuthUser(null);
+      } catch { setAuthUser(null); }
+    }
+
+    document.getElementById("openLogin").addEventListener("click", () => showAuth("login"));
+    document.getElementById("openRegister").addEventListener("click", () => showAuth("register"));
+    document.getElementById("loginTab").addEventListener("click", () => showAuth("login"));
+    document.getElementById("registerTab").addEventListener("click", () => showAuth("register"));
+    document.getElementById("closeAuth").addEventListener("click", closeAuth);
+    authModal.addEventListener("click", event => { if (event.target === authModal) closeAuth(); });
+    document.addEventListener("keydown", event => { if (event.key === "Escape" && !authModal.hidden) closeAuth(); });
+    loginForm.addEventListener("submit", submitAuth);
+    registerForm.addEventListener("submit", submitAuth);
+    document.getElementById("logoutButton").addEventListener("click", async () => {
+      const button = document.getElementById("logoutButton");
+      button.disabled = true;
+      try {
+        const response = await fetch("/api/auth/logout", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: "{}"
+        });
+        if (!response.ok) throw new Error("Could not log out. Please try again.");
+        setAuthUser(null);
+      } catch (error) {
+        window.alert(error.message || "Could not log out. Please try again.");
+      } finally { button.disabled = false; }
+    });
+
+    refreshAuthState();
 
     loadProducts();
 
