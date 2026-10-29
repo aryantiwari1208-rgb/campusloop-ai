@@ -8,6 +8,7 @@ const session = require("express-session");
 const { MongoStore } = require("connect-mongo");
 const { rateLimit } = require("express-rate-limit");
 const crypto = require("crypto");
+const { formatMongoDiagnostic } = require("./mongo-diagnostics");
 
 const app = express();
 if (process.env.NODE_ENV === "production") {
@@ -55,7 +56,7 @@ function handleAuthDatabaseError(res, error) {
     if (error && error.code === 11000) {
         return res.status(409).json({ status: "error", message: "An account with this email already exists." });
     }
-    console.error("Authentication database operation failed.");
+    console.error("Authentication database operation failed:", formatMongoDiagnostic(error));
     return res.status(db ? 500 : 503).json({
         status: "error",
         message: db ? "Could not complete the authentication request." : "Authentication service is unavailable."
@@ -165,7 +166,7 @@ function escapeRegex(value) {
 }
 
 function handleProductDatabaseError(res, error) {
-    console.error("Product database operation failed:", error.message);
+    console.error("Product database operation failed:", formatMongoDiagnostic(error));
     return res.status(db ? 500 : 503).json({
         status: "error",
         message: db
@@ -222,8 +223,9 @@ async function connectToMongoDB() {
         })), { ordered: true });
         console.log("MongoDB connected successfully!");
     } catch (error) {
-        console.error("MongoDB connection failed:", error.message);
-        process.exitCode = 1;
+        db = null;
+        authSessionMiddleware = null;
+        console.error("MongoDB connection failed:", formatMongoDiagnostic(error));
     }
 }
 
@@ -517,7 +519,7 @@ function eventsCollection() {
 }
 
 function handleEventDatabaseError(res, error) {
-    console.error("Event database operation failed:", error.message);
+    console.error("Event database operation failed:", formatMongoDiagnostic(error));
     return res.status(db ? 500 : 503).json({
         status: "error",
         message: db
