@@ -270,14 +270,13 @@ app.get("/", (req, res) => {
 // ==========================================
 // HEALTH CHECK
 // ==========================================
-
 app.get("/api/health", (req, res) => {
     res.json({
         status: "success",
-        message: "CampusLoop AI server is running!"
+        message: "CampusLoop AI server is running!",
+        database: db ? "connected" : "disconnected"
     });
 });
-
 
 
 
