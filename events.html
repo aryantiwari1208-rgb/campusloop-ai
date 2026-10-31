@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Campus Events · CampusLoop AI</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #f5f7fb;
+      color: #17233c;
+    }
+    header {
+      background: #122344;
+      color: white;
+      padding: 22px 7%;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 14px;
+    }
+    header h1 { margin: 0; font-size: 25px; }
+    header span { color: #72e2c0; }
+    main { padding: 32px 7%; }
+    .toolbar {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-bottom: 20px;
+    }
+    .toolbar h2 { margin: 0; }
+    .button, button {
+      display: inline-block;
+      padding: 13px;
+      border: 0;
+      border-radius: 9px;
+      background: #087f68;
+      color: white;
+      cursor: pointer;
+      font-size: 15px;
+      font-weight: bold;
+      text-decoration: none;
+    }
+    .button:hover, button:hover { background: #066b58; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 20px;
+    }
+    .event-card {
+      background: white;
+      border: 1px solid #dce5f1;
+      border-radius: 15px;
+      padding: 20px;
+      box-shadow: 0 4px 16px #17233c0a;
+    }
+    .event-card h3 { margin: 12px 0 14px; }
+    .event-meta {
+      display: grid;
+      gap: 8px;
+      color: #65718a;
+      font-size: 14px;
+      line-height: 1.45;
+    }
+    .event-description {
+      margin: 16px 0 0;
+      color: #65718a;
+      line-height: 1.6;
+    }
+    .tag {
+      display: inline-block;
+      background: #e1f7ef;
+      color: #087f68;
+      padding: 5px 9px;
+      border-radius: 20px;
+      font-size: 12px;
+    }
+    .loading { color: #65718a; }
+    .success { color: #087f68; }
+    .error { color: #c0392b; }
+    footer {
+      text-align: center;
+      color: #65718a;
+      padding: 25px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Campus<span>Loop</span> AI</h1>
+    <div>Student Marketplace · Buy Smart, Reuse More</div>
+  </header>
+
+  <main>
+    <div class="toolbar">
+      <h2>Campus events</h2>
+      <a class="button" href="/index.html">← Back to Home</a>
+    </div>
+    <p id="eventMessage" role="status" aria-live="polite"></p>
+    <div class="grid" id="eventsList" aria-live="polite"></div>
+  </main>
+
+  <footer>CampusLoop AI · A smarter, more sustainable campus</footer>
+
+  <script>
+    const container = document.getElementById("eventsList");
+    const eventMessage = document.getElementById("eventMessage");
+
+    function formatEventDate(value) {
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return value || "Date to be announced";
+      return date.toLocaleString(undefined, {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit"
+      });
+    }
+
+    function displayEvents(events) {
+      container.replaceChildren();
+      if (!events || events.length === 0) {
+        const message = document.createElement("p");
+        message.className = "loading";
+        message.textContent = "No campus events are available right now.";
+        container.appendChild(message);
+        return;
+      }
+
+      events.forEach(event => {
+        const card = document.createElement("article");
+        card.className = "event-card";
+
+        const category = document.createElement("span");
+        category.className = "tag";
+        category.textContent = event.category || "Campus event";
+
+        const title = document.createElement("h3");
+        title.textContent = event.title || "Untitled event";
+
+        const meta = document.createElement("div");
+        meta.className = "event-meta";
+        meta.textContent = `📅 ${formatEventDate(event.date)}\n📍 ${event.location || "Location to be announced"}`;
+        meta.style.whiteSpace = "pre-line";
+        card.append(category, title, meta);
+
+        if (event.description) {
+          const description = document.createElement("p");
+          description.className = "event-description";
+          description.textContent = event.description;
+          card.appendChild(description);
+        }
+        container.appendChild(card);
+      });
+    }
+
+    async function loadEvents() {
+      container.replaceChildren();
+      eventMessage.className = "loading";
+      eventMessage.textContent = "Loading campus events...";
+      try {
+        const response = await fetch("/api/events");
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.message || "Could not load events.");
+        displayEvents(data.events || []);
+        eventMessage.textContent = new URLSearchParams(window.location.search).has("created")
+          ? "Event created successfully."
+          : "";
+        eventMessage.className = "success";
+      } catch (error) {
+        console.error("Event loading error:", error);
+        eventMessage.className = "error";
+        eventMessage.textContent = error.message || "Unable to load events. Please try again.";
+      }
+    }
+
+    loadEvents();
+  </script>
+</body>
+</html>

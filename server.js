@@ -15,6 +15,17 @@ const authClient = createClient(supabaseUrl, supabaseKey, {
         detectSessionInUrl: false
     }
 });
+const colleges = [
+    "BIT Mesra",
+    "Birla Institute of Technology, Patna",
+    "IIT Patna",
+    "NIT Patna",
+    "Patna University",
+    "AIIMS Patna"
+];
+function missingCollegeColumn(error) {
+    return /column .*college does not exist/i.test(error?.message || "");
+}
 async function testSupabaseConnection() {
     const { data, error } = await supabase
         .from('products')
@@ -61,13 +72,33 @@ app.get("/api/health", (req, res) => {
 
 app.get("/api/products", async (req, res) => {
     try {
-        const { data, error } = await supabase
+        const college = typeof req.query.college === "string" ? req.query.college.trim() : "";
+        if (college && college !== "All Colleges" && !colleges.includes(college)) {
+            return res.status(400).json({
+                status: "error",
+                message: "Select a valid college."
+            });
+        }
+
+        let productsQuery = supabase
             .from("products")
             .select("*")
-            .order("id", { ascending: true });
+            .order("created_at", { ascending: false, nullsFirst: false })
+            .order("id", { ascending: false });
+        if (college && college !== "All Colleges") {
+            productsQuery = productsQuery.eq("college", college);
+        }
+
+        const { data, error } = await productsQuery;
 
         if (error) {
             console.error("Products error:", error.message);
+            if (college && college !== "All Colleges" && missingCollegeColumn(error)) {
+                return res.status(503).json({
+                    status: "error",
+                    message: "College filtering is unavailable until the products college migration is applied."
+                });
+            }
             return res.status(500).json({
                 status: "error",
                 message: "Could not fetch products."
@@ -172,6 +203,7 @@ app.post("/api/auth/register", async (req, res) => {
     const name = typeof body.name === "string" ? body.name.trim() : "";
     const email = normalizeEmail(body.email);
     const password = body.password;
+    const college = typeof body.college === "string" ? body.college.trim() : "";
 
     if (name.length < 1 || name.length > 80) {
         return res.status(400).json({
@@ -197,6 +229,12 @@ app.post("/api/auth/register", async (req, res) => {
             message: "Passwords do not match."
         });
     }
+    if (!colleges.includes(college)) {
+        return res.status(400).json({
+            status: "error",
+            message: "Select a valid college."
+        });
+    }
 
     let authUser;
     try {
@@ -204,7 +242,7 @@ app.post("/api/auth/register", async (req, res) => {
             email,
             password,
             email_confirm: true,
-            user_metadata: { name }
+            user_metadata: { name, college }
         });
 
         if (error) {
@@ -224,7 +262,7 @@ app.post("/api/auth/register", async (req, res) => {
         authUser = data.user;
         const { error: profileError } = await supabase
             .from("profiles")
-            .insert({ id: authUser.id, name, email });
+            .insert({ id: authUser.id, name, email, college });
 
         if (profileError) {
             await supabase.auth.admin.deleteUser(authUser.id);
@@ -241,7 +279,8 @@ app.post("/api/auth/register", async (req, res) => {
             user: {
                 id: authUser.id,
                 name,
-                email
+                email,
+                college
             }
         });
     } catch (error) {
@@ -286,7 +325,7 @@ app.post("/api/auth/login", async (req, res) => {
 
         const { data: profile, error: profileError } = await supabase
             .from("profiles")
-            .select("name,email")
+            .select("name,email,college")
             .eq("id", data.user.id)
             .maybeSingle();
 
@@ -305,7 +344,8 @@ app.post("/api/auth/login", async (req, res) => {
             user: {
                 id: data.user.id,
                 name: profile?.name || data.user.user_metadata?.name || email,
-                email: profile?.email || data.user.email || email
+                email: profile?.email || data.user.email || email,
+                college: profile?.college || data.user.user_metadata?.college || null
             }
         });
     } catch (error) {
@@ -328,7 +368,7 @@ app.get("/api/auth/me", async (req, res) => {
 
         const { data: profile, error } = await supabase
             .from("profiles")
-            .select("name,email")
+            .select("name,email,college")
             .eq("id", authUser.id)
             .maybeSingle();
 
@@ -345,7 +385,8 @@ app.get("/api/auth/me", async (req, res) => {
             user: {
                 id: authUser.id,
                 name: profile?.name || authUser.user_metadata?.name || authUser.email,
-                email: profile?.email || authUser.email
+                email: profile?.email || authUser.email,
+                college: profile?.college || authUser.user_metadata?.college || null
             }
         });
     } catch (error) {
@@ -365,16 +406,157 @@ app.post("/api/auth/logout", (req, res) => {
     });
 });
 
+app.post("/api/products", async (req, res) => {
+    try {
+        const authUser = await getAuthenticatedUser(req, res);
+        if (!authUser) {
+            return res.status(401).json({
+                status: "error",
+                message: "Log in before listing an item."
+            });
+        }
+
+        const body = req.body && typeof req.body === "object" ? req.body : {};
+        const name = typeof body.name === "string" ? body.name.trim() : "";
+        const description = typeof body.description === "string" ? body.description.trim() : "";
+        const category = typeof body.category === "string" ? body.category.trim() : "";
+        const icon = typeof body.icon === "string" ? body.icon.trim() : "📦";
+        const price = typeof body.price === "number" ? body.price : Number(body.price);
+
+        if (!name || name.length > 120 || description.length > 2000 ||
+            !category || category.length > 80 || !Number.isFinite(price) ||
+            price < 0 || price > 10000000 || !/^\S+$/.test(icon)) {
+            return res.status(400).json({
+                status: "error",
+                message: "Enter a valid item name, description, category, and price."
+            });
+        }
+
+        const { data: profile, error: profileError } = await supabase
+            .from("profiles")
+            .select("college")
+            .eq("id", authUser.id)
+            .maybeSingle();
+        if (profileError) {
+            console.error("Product profile lookup error:", profileError.message);
+            return res.status(500).json({
+                status: "error",
+                message: "Could not determine your college."
+            });
+        }
+        if (!profile?.college || !colleges.includes(profile.college)) {
+            return res.status(400).json({
+                status: "error",
+                message: "Add a valid college to your profile before listing an item."
+            });
+        }
+
+        const { data, error } = await supabase
+            .from("products")
+            .insert({
+                name,
+                description: description || null,
+                category,
+                price,
+                icon,
+                college: profile.college
+            })
+            .select("*")
+            .single();
+        if (error) {
+            console.error("Product creation error:", error.message);
+            if (missingCollegeColumn(error)) {
+                return res.status(503).json({
+                    status: "error",
+                    message: "College listings are unavailable until the products college migration is applied."
+                });
+            }
+            return res.status(500).json({
+                status: "error",
+                message: "Could not create the item."
+            });
+        }
+
+        return res.status(201).json({
+            status: "success",
+            message: "Item listed successfully.",
+            product: data
+        });
+    } catch (error) {
+        console.error("Product creation error:", error.message);
+        return res.status(500).json({
+            status: "error",
+            message: "Something went wrong while creating the item."
+        });
+    }
+});
+
+app.get("/api/people/grouped", async (req, res) => {
+    try {
+        const authUser = await getAuthenticatedUser(req, res);
+        if (!authUser) {
+            return res.status(401).json({
+                status: "error",
+                message: "Not authenticated."
+            });
+        }
+
+        const { data, error } = await supabase
+            .from("profiles")
+            .select("name,college")
+            .not("college", "is", null)
+            .order("college", { ascending: true })
+            .order("name", { ascending: true });
+
+        if (error) {
+            console.error("People directory error:", error.message);
+            return res.status(500).json({
+                status: "error",
+                message: "Could not load the college directory."
+            });
+        }
+
+        const groups = {};
+        for (const profile of data) {
+            if (!groups[profile.college]) groups[profile.college] = [];
+            groups[profile.college].push({ name: profile.name });
+        }
+
+        return res.json({
+            status: "success",
+            groups: Object.entries(groups).map(([college, students]) => ({
+                college,
+                count: students.length,
+                students
+            }))
+        });
+    } catch (error) {
+        console.error("People directory error:", error.message);
+        return res.status(500).json({
+            status: "error",
+            message: "Could not load the college directory."
+        });
+    }
+});
+
 // Listings and events require persistent storage.
 app.get("/api/products/search", async (req, res) => {
     const searchTerm = typeof req.query.q === "string" ? req.query.q.trim() : "";
     const category = typeof req.query.category === "string" ? req.query.category.trim() : "";
+    const college = typeof req.query.college === "string" ? req.query.college.trim() : "";
+    if (college && college !== "All Colleges" && !colleges.includes(college)) {
+        return res.status(400).json({
+            status: "error",
+            message: "Select a valid college."
+        });
+    }
 
     try {
         let productsQuery = supabase
             .from("products")
             .select("*")
-            .order("id", { ascending: true });
+            .order("created_at", { ascending: false, nullsFirst: false })
+            .order("id", { ascending: false });
 
         if (searchTerm) {
             const safeSearchTerm = searchTerm.replace(/[(),\\]/g, " ");
@@ -384,10 +566,19 @@ app.get("/api/products/search", async (req, res) => {
         if (category && category !== "All") {
             productsQuery = productsQuery.eq("category", category);
         }
+        if (college && college !== "All Colleges") {
+            productsQuery = productsQuery.eq("college", college);
+        }
 
         const { data, error } = await productsQuery;
         if (error) {
             console.error("Product search error:", error.message);
+            if (college && college !== "All Colleges" && missingCollegeColumn(error)) {
+                return res.status(503).json({
+                    status: "error",
+                    message: "College filtering is unavailable until the products college migration is applied."
+                });
+            }
             return res.status(500).json({
                 status: "error",
                 message: "Could not search products."
@@ -476,6 +667,59 @@ app.get("/api/events", async (req, res) => {
         return res.status(500).json({
             status: "error",
             message: "Something went wrong while fetching events."
+        });
+    }
+});
+app.post("/api/events", async (req, res) => {
+    const body = req.body && typeof req.body === "object" ? req.body : {};
+    const title = typeof body.title === "string" ? body.title.trim() : "";
+    const description = typeof body.description === "string" ? body.description.trim() : "";
+    const date = typeof body.date === "string" ? body.date.trim() : "";
+    const location = typeof body.location === "string" ? body.location.trim() : "";
+    const category = typeof body.category === "string" ? body.category.trim() : "";
+
+    if (!title || title.length > 120 ||
+        description.length > 2000 ||
+        !date || Number.isNaN(Date.parse(date)) ||
+        !location || location.length > 200 ||
+        !category || category.length > 80) {
+        return res.status(400).json({
+            status: "error",
+            message: "Enter a valid title, date, location, and category."
+        });
+    }
+
+    try {
+        const { data, error } = await supabase
+            .from("events")
+            .insert({
+                title,
+                description: description || null,
+                date: new Date(date).toISOString(),
+                location,
+                category
+            })
+            .select("*")
+            .single();
+
+        if (error) {
+            console.error("Event creation error:", error.message);
+            return res.status(500).json({
+                status: "error",
+                message: "Could not create the event."
+            });
+        }
+
+        return res.status(201).json({
+            status: "success",
+            message: "Event created successfully.",
+            event: data
+        });
+    } catch (error) {
+        console.error("Event creation error:", error.message);
+        return res.status(500).json({
+            status: "error",
+            message: "Something went wrong while creating the event."
         });
     }
 });

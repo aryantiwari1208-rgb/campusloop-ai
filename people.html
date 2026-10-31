@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Campus Directory · CampusLoop AI</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: Arial, sans-serif; background: #f5f7fb; color: #17233c; }
+    header { background: #122344; color: white; padding: 22px 7%; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px; }
+    header h1 { margin: 0; font-size: 25px; }
+    header span { color: #72e2c0; }
+    main { padding: 32px 7%; }
+    .toolbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
+    .toolbar h2 { margin: 0; }
+    .button { display: inline-block; padding: 13px; border-radius: 9px; background: #087f68; color: white; font-weight: bold; text-decoration: none; }
+    .button:hover { background: #066b58; }
+    .groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 18px; }
+    .group { padding: 20px; border: 1px solid #dce5f1; border-radius: 15px; background: white; box-shadow: 0 4px 16px #17233c0a; }
+    .group h3 { margin-top: 0; color: #087f68; }
+    .group ul { margin: 0; padding-left: 20px; line-height: 1.8; }
+    .message { color: #65718a; }
+    .error { color: #c0392b; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Campus<span>Loop</span> AI</h1>
+    <div>Student Marketplace · Buy Smart, Reuse More</div>
+  </header>
+  <main>
+    <div class="toolbar">
+      <h2>Campus directory</h2>
+      <a class="button" href="/index.html">← Back to Home</a>
+    </div>
+    <p id="message" class="message" role="status" aria-live="polite">Loading college groups...</p>
+    <section id="groups" class="groups"></section>
+  </main>
+  <script>
+    async function loadGroups() {
+      const message = document.getElementById("message");
+      const container = document.getElementById("groups");
+      try {
+        const response = await fetch("/api/people/grouped", { credentials: "same-origin" });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.message || "Could not load the directory.");
+        const groups = Array.isArray(data.groups) ? data.groups : [];
+        container.replaceChildren();
+        if (groups.length === 0) {
+          message.textContent = "No college groups are available yet.";
+          return;
+        }
+        message.textContent = "";
+        for (const groupData of groups) {
+          const group = document.createElement("article");
+          group.className = "group";
+          const heading = document.createElement("h3");
+          heading.textContent = `${groupData.college} (${groupData.count})`;
+          const list = document.createElement("ul");
+          for (const person of groupData.students || []) {
+            const item = document.createElement("li");
+            item.textContent = person.name || "Campus member";
+            list.appendChild(item);
+          }
+          group.append(heading, list);
+          container.appendChild(group);
+        }
+      } catch (error) {
+        console.error("Directory loading error:", error);
+        message.className = "error";
+        message.textContent = error.message || "Unable to load the directory.";
+      }
+    }
+    loadGroups();
+  </script>
+</body>
+</html>

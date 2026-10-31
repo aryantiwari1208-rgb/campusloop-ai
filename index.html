@@ -11,17 +11,102 @@
       box-sizing: border-box;
     }
 
+    .listing-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 9;
+      display: grid;
+      place-items: center;
+      padding: 18px;
+      background: #0b1730bb;
+    }
+
+    .listing-modal[hidden] { display: none; }
+    .listing-panel {
+      width: min(100%, 500px);
+      max-height: 90vh;
+      overflow: auto;
+      padding: 28px;
+      border-radius: 16px;
+      background: white;
+    }
+    .listing-form { display: grid; gap: 12px; }
+    .listing-form label { display: grid; gap: 6px; font-size: 14px; font-weight: 600; }
+    .listing-form input, .listing-form textarea, .listing-form select { width: 100%; }
+    .listing-form textarea { min-height: 90px; resize: vertical; }
+
     body {
       margin: 0;
-      font-family: Arial, sans-serif;
-      background: #f5f7fb;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #f7fafc;
       color: #17233c;
     }
 
+    function showListingForm() {
+      if (!currentUser) {
+        showAuth("login");
+        showAuthMessage("Please log in before listing an item.", "error");
+        return;
+      }
+      document.getElementById("listingModal").hidden = false;
+      document.querySelector('#listingForm input[name="name"]').focus();
+    }
+
+    function closeListingForm() {
+      document.getElementById("listingModal").hidden = true;
+    }
+
+    async function submitListing(event) {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const values = Object.fromEntries(new FormData(form).entries());
+      const message = document.getElementById("listingMessage");
+      const button = document.getElementById("submitListing");
+      if (!values.name.trim() || !values.category.trim() || !values.price ||
+          Number(values.price) < 0) {
+        message.textContent = "Name, category, and a valid price are required.";
+        message.className = "auth-message error";
+        return;
+      }
+      button.disabled = true;
+      message.textContent = "Listing item...";
+      try {
+        const response = await fetch("/api/products", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: values.name.trim(),
+            description: values.description.trim(),
+            category: values.category.trim(),
+            price: Number(values.price),
+            icon: values.icon.trim() || "📦"
+          })
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.message || "Could not list item.");
+        closeListingForm();
+        form.reset();
+        loadProducts();
+        const cartMessage = document.getElementById("cartMessage");
+        cartMessage.textContent = "Item listed successfully.";
+      } catch (error) {
+        console.error("Listing error:", error);
+        message.textContent = error.message || "Unable to list item.";
+        message.className = "auth-message error";
+      } finally {
+        button.disabled = false;
+      }
+    }
+
     header {
-      background: #122344;
+      position: sticky;
+      top: 0;
+      z-index: 8;
+      background: #122344ee;
+      backdrop-filter: blur(14px);
       color: white;
-      padding: 22px 7%;
+      padding: 16px 7%;
       display: flex;
       justify-content: space-between;
       align-items: center;
@@ -31,7 +116,8 @@
 
     header h1 {
       margin: 0;
-      font-size: 25px;
+      font-size: 24px;
+      letter-spacing: -0.5px;
     }
 
     header span {
@@ -39,26 +125,91 @@
     }
 
     .hero {
-      padding: 48px 7%;
-      background: linear-gradient(120deg, #172e55, #2563a8);
+      position: relative;
+      overflow: hidden;
+      padding: 86px 7% 76px;
+      background:
+        radial-gradient(circle at 85% 20%, #72e2c033 0 120px, transparent 121px),
+        radial-gradient(circle at 92% 78%, #4b9ee833 0 180px, transparent 181px),
+        linear-gradient(120deg, #122344 0%, #1c477c 58%, #087f68 140%);
       color: white;
     }
 
+    .hero::after {
+      content: "";
+      position: absolute;
+      width: 280px;
+      height: 280px;
+      right: 4%;
+      bottom: -180px;
+      border: 1px solid #ffffff2b;
+      border-radius: 50%;
+    }
+
+    .hero-content {
+      position: relative;
+      z-index: 1;
+      max-width: 760px;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin: 0 0 18px;
+      padding: 8px 13px;
+      border: 1px solid #72e2c066;
+      border-radius: 999px;
+      background: #ffffff12;
+      color: #b6f5e2;
+      font-size: 13px;
+      font-weight: bold;
+    }
+
     .hero h2 {
-      font-size: clamp(28px, 5vw, 44px);
-      margin: 0 0 12px;
+      max-width: 700px;
+      font-size: clamp(38px, 6vw, 70px);
+      line-height: 1.02;
+      letter-spacing: -2px;
+      margin: 0 0 20px;
     }
 
     .hero p {
-      color: #dce8ff;
+      max-width: 620px;
+      color: #e2efff;
+      font-size: 18px;
       line-height: 1.6;
+    }
+
+    .hero-actions {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-top: 28px;
+    }
+
+    .hero-actions .button {
+      padding: 14px 18px;
+    }
+
+    .button-light {
+      background: #ffffff;
+      color: #122344;
+    }
+
+    .button-light:hover {
+      background: #e8f5f2;
     }
 
     .search {
       display: flex;
       gap: 10px;
-      margin-top: 24px;
-      max-width: 650px;
+      margin-top: 34px;
+      max-width: 720px;
+      padding: 8px;
+      border-radius: 14px;
+      background: white;
+      box-shadow: 0 14px 35px #0618323b;
     }
 
     input,
@@ -73,6 +224,10 @@
     .search input {
       flex: 1;
       min-width: 0;
+      border: 0;
+      outline: 0;
+      padding: 14px;
+      background: transparent;
     }
 
     button {
@@ -87,8 +242,125 @@
       background: #066b58;
     }
 
+    .button {
+      display: inline-block;
+      padding: 13px;
+      border-radius: 9px;
+      background: #087f68;
+      color: white;
+      font-weight: bold;
+      text-decoration: none;
+    }
+
+    .button:hover {
+      background: #066b58;
+    }
+
+    .cart-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 14px;
+      border-radius: 9px;
+      background: #087f68;
+      color: white;
+      font-weight: bold;
+      text-decoration: none;
+    }
+
+    .cart-link:hover {
+      background: #066b58;
+    }
+
+    .cart-count {
+      min-width: 22px;
+      padding: 2px 6px;
+      border-radius: 12px;
+      background: white;
+      color: #087f68;
+      text-align: center;
+      font-size: 13px;
+    }
+
+    .cart-message {
+      min-height: 22px;
+      margin: 0 0 18px;
+      color: #087f68;
+      font-weight: bold;
+    }
+
     main {
       padding: 32px 7%;
+    }
+
+    .category-section {
+      padding: 34px 7% 4px;
+    }
+
+    .section-heading {
+      display: flex;
+      justify-content: space-between;
+      align-items: end;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .section-heading h2 {
+      margin: 0;
+      font-size: 24px;
+    }
+
+    .section-heading p {
+      margin: 5px 0 0;
+      color: #65718a;
+    }
+
+    .category-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+    }
+
+    .category-card {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-height: 92px;
+      padding: 16px;
+      border: 1px solid #dfe8f2;
+      border-radius: 15px;
+      background: white;
+      color: #17233c;
+      text-align: left;
+      box-shadow: 0 5px 18px #17233c0a;
+    }
+
+    .category-card:hover {
+      border-color: #72e2c0;
+      transform: translateY(-2px);
+    }
+
+    .category-icon {
+      display: grid;
+      flex: 0 0 42px;
+      width: 42px;
+      height: 42px;
+      place-items: center;
+      border-radius: 12px;
+      background: #e1f7ef;
+      font-size: 22px;
+    }
+
+    .category-card strong {
+      display: block;
+      font-size: 14px;
+    }
+
+    .category-card small {
+      display: block;
+      margin-top: 4px;
+      color: #65718a;
+      font-size: 12px;
     }
 
     .toolbar {
@@ -116,6 +388,12 @@
       border-radius: 15px;
       overflow: hidden;
       box-shadow: 0 4px 16px #17233c0a;
+      transition: transform 160ms ease, box-shadow 160ms ease;
+    }
+
+    .card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 14px 28px #17233c18;
     }
 
     .picture {
@@ -156,6 +434,65 @@
 
     .details button {
       width: 100%;
+      margin-top: 8px;
+    }
+
+    .event-form-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 9;
+      display: grid;
+      place-items: center;
+      padding: 18px;
+      background: #0b1730bb;
+    }
+
+    .event-form-modal[hidden] {
+      display: none;
+    }
+
+    .event-form-panel {
+      position: relative;
+      width: min(100%, 520px);
+      max-height: 90vh;
+      overflow: auto;
+      padding: 28px;
+      border-radius: 16px;
+      background: #fff;
+      box-shadow: 0 20px 60px #0004;
+    }
+
+    .event-form-panel h2 {
+      margin: 0 36px 8px 0;
+    }
+
+    .event-form {
+      display: grid;
+      gap: 12px;
+    }
+
+    .event-form label {
+      display: grid;
+      gap: 6px;
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .event-form input,
+    .event-form textarea,
+    .event-form select {
+      width: 100%;
+    }
+
+    .event-form textarea {
+      min-height: 90px;
+      resize: vertical;
+    }
+
+    .event-form-actions {
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
     }
 
     .assistant {
@@ -192,6 +529,30 @@
     @media (max-width: 480px) {
       .search {
         flex-direction: column;
+      }
+    }
+
+    @media (max-width: 760px) {
+      .category-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    @media (max-width: 480px) {
+      .hero {
+        padding-top: 58px;
+      }
+
+      .hero h2 {
+        letter-spacing: -1px;
+      }
+
+      .category-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .section-heading {
+        display: block;
       }
     }
 
@@ -246,6 +607,10 @@
 
 
   <nav class="auth-nav" aria-label="Account">
+    <a class="cart-link" href="/cart.html" aria-label="Shopping cart">
+      🛒 Cart <span id="cartCount" class="cart-count">0</span>
+    </a>
+    <a class="button" href="/people.html">Campus Directory</a>
     <span id="authWelcome" class="auth-welcome" hidden></span>
     <button id="openLogin" class="auth-secondary" type="button">Log in</button>
     <button id="openRegister" type="button">Sign up</button>
@@ -261,18 +626,52 @@
   <section class="hero">
 
 ```
-<h2>
-  Your campus. Your community.
-</h2>
+<div class="hero-content">
+  <p class="eyebrow">✨ Built for campus life</p>
+  <h2>Find what you need. Pass on what you no longer do.</h2>
+  <p>Shop affordable student essentials, discover campus events, and keep useful things moving through your community.</p>
+  <div class="hero-actions">
+    <button class="button" type="button" onclick="document.getElementById('searchInput').focus()">
+      Explore Marketplace
+    </button>
+    <button class="button button-light" type="button" onclick="showListingForm()">
+      Sell an Item
+    </button>
+  </div>
+</div>
 
-<p>
-  Discover affordable student essentials and give useful items a second life.
-</p>
+<div id="listingModal" class="listing-modal" role="presentation" hidden>
+  <section class="listing-panel" role="dialog" aria-modal="true" aria-labelledby="listingTitle">
+    <button id="closeListing" class="auth-close" type="button" aria-label="Close">✕</button>
+    <h2 id="listingTitle">Sell an item</h2>
+    <p>Your saved college will be assigned automatically.</p>
+    <form id="listingForm" class="listing-form" novalidate>
+      <label>Item name
+        <input name="name" type="text" maxlength="120" required>
+      </label>
+      <label>Description
+        <textarea name="description" maxlength="2000"></textarea>
+      </label>
+      <label>Category
+        <input name="category" type="text" maxlength="80" required>
+      </label>
+      <label>Price (₹)
+        <input name="price" type="number" min="0" max="10000000" step="0.01" required>
+      </label>
+      <label>Icon
+        <input name="icon" type="text" maxlength="4" value="📦">
+      </label>
+      <button id="submitListing" type="submit">List Item</button>
+    </form>
+    <p id="listingMessage" class="auth-message" role="status" aria-live="polite"></p>
+  </section>
+</div>
 
 <div class="search">
 
   <input
     id="searchInput"
+    aria-label="Search marketplace"
     placeholder="Search books, calculators, lab coats..."
   >
 
@@ -283,6 +682,33 @@
 </div>
 ```
 
+  </section>
+
+  <section class="category-section" aria-labelledby="categoryTitle">
+    <div class="section-heading">
+      <div>
+        <h2 id="categoryTitle">Shop by category</h2>
+        <p>Find campus essentials faster.</p>
+      </div>
+    </div>
+    <div class="category-grid">
+      <button class="category-card" type="button" onclick="selectCategory('Books')">
+        <span class="category-icon">📚</span>
+        <span><strong>Books & Notes</strong><small>Textbooks and study guides</small></span>
+      </button>
+      <button class="category-card" type="button" onclick="selectCategory('Electronics')">
+        <span class="category-icon">💻</span>
+        <span><strong>Electronics</strong><small>Gadgets and accessories</small></span>
+      </button>
+      <button class="category-card" type="button" onclick="selectCategory('Lab')">
+        <span class="category-icon">🧪</span>
+        <span><strong>Lab Equipment</strong><small>Gear for practical work</small></span>
+      </button>
+      <button class="category-card" type="button" onclick="selectCategory('All')">
+        <span class="category-icon">🎒</span>
+        <span><strong>All Essentials</strong><small>Browse every listing</small></span>
+      </button>
+    </div>
   </section>
 
   <!-- ==========================================
@@ -321,6 +747,24 @@
 
   </select>
 
+  <select id="collegeFilter" onchange="searchItems()" aria-label="Filter by college">
+    <option>All Colleges</option>
+    <option>BIT Mesra</option>
+    <option>Birla Institute of Technology, Patna</option>
+    <option>IIT Patna</option>
+    <option>NIT Patna</option>
+    <option>Patna University</option>
+    <option>AIIMS Patna</option>
+  </select>
+
+  <a class="button" href="/events.html">
+    📅 All Events
+  </a>
+
+  <button id="createEventButton" type="button" onclick="showEventForm()">
+    + Create Event
+  </button>
+
 </div>
 
 
@@ -330,7 +774,7 @@
   class="grid"
   id="listings"
 ></div>
-
+<p id="cartMessage" class="cart-message" role="status" aria-live="polite"></p>
 
 <!-- ==========================================
      AI ASSISTANT
@@ -402,6 +846,17 @@
         <label>Name
           <input name="name" type="text" autocomplete="name" maxlength="80" required>
         </label>
+        <label>College
+          <select name="college" required>
+            <option value="">Select your college</option>
+            <option>BIT Mesra</option>
+            <option>Birla Institute of Technology, Patna</option>
+            <option>IIT Patna</option>
+            <option>NIT Patna</option>
+            <option>Patna University</option>
+            <option>AIIMS Patna</option>
+          </select>
+        </label>
         <label>Email
           <input name="email" type="email" autocomplete="email" maxlength="254" required>
         </label>
@@ -417,6 +872,36 @@
     </section>
   </div>
 
+  <div id="eventFormModal" class="event-form-modal" role="presentation" hidden>
+    <section class="event-form-panel" role="dialog" aria-modal="true" aria-labelledby="eventFormTitle">
+      <button id="closeEventForm" class="auth-close" type="button" aria-label="Close">✕</button>
+      <h2 id="eventFormTitle">Create a campus event</h2>
+      <p>Create an event for your campus community.</p>
+      <form id="eventForm" class="event-form" novalidate>
+        <label>Event title
+          <input name="title" type="text" maxlength="120" required>
+        </label>
+        <label>Description
+          <textarea name="description" maxlength="2000"></textarea>
+        </label>
+        <label>Date and time
+          <input name="date" type="datetime-local" required>
+        </label>
+        <label>Location
+          <input name="location" type="text" maxlength="200" required>
+        </label>
+        <label>Category
+          <input name="category" type="text" maxlength="80" required>
+        </label>
+        <div class="event-form-actions">
+          <button id="cancelEventForm" class="auth-secondary" type="button">Cancel</button>
+          <button id="submitEventButton" type="submit">Create Event</button>
+        </div>
+      </form>
+      <p id="eventFormMessage" class="auth-message" role="status" aria-live="polite"></p>
+    </section>
+  </div>
+
   <script>
 
     // ==========================================
@@ -424,6 +909,131 @@
     // ==========================================
 
     let products = [];
+    const cartStorageKey = "campusloop.cart";
+
+    function readCart() {
+      try {
+        const stored = JSON.parse(localStorage.getItem(cartStorageKey) || "[]");
+        if (!Array.isArray(stored)) throw new Error("Invalid cart format");
+
+        const validItems = [];
+        for (const item of stored) {
+          if (!item || !Number.isSafeInteger(item.id) || item.id < 1 ||
+              !Number.isSafeInteger(item.quantity) || item.quantity < 1 ||
+              item.quantity > 99) continue;
+          const existing = validItems.find(cartItem => cartItem.id === item.id);
+          if (existing) {
+            existing.quantity = Math.min(99, existing.quantity + item.quantity);
+          } else {
+            validItems.push({ id: item.id, quantity: item.quantity });
+          }
+        }
+        if (JSON.stringify(validItems) !== JSON.stringify(stored)) {
+          localStorage.setItem(cartStorageKey, JSON.stringify(validItems));
+        }
+        return validItems;
+      } catch {
+        localStorage.removeItem(cartStorageKey);
+        return [];
+      }
+    }
+
+    function writeCart(cart) {
+      localStorage.setItem(cartStorageKey, JSON.stringify(cart));
+      updateCartCount();
+    }
+
+    function updateCartCount() {
+      const count = readCart().reduce((total, item) => total + item.quantity, 0);
+      const countElement = document.getElementById("cartCount");
+      if (countElement) countElement.textContent = count;
+    }
+
+    function addToCart(productId) {
+      if (!Number.isSafeInteger(productId) || productId < 1) return;
+      if (!currentUser) {
+        showAuth("login");
+        showAuthMessage("Please log in before adding products to your cart.", "error");
+        return;
+      }
+      const cart = readCart();
+      const item = cart.find(cartItem => cartItem.id === productId);
+      if (item) {
+        item.quantity = Math.min(99, item.quantity + 1);
+      } else {
+        cart.push({ id: productId, quantity: 1 });
+      }
+      writeCart(cart);
+      const product = products.find(item => item.id === productId);
+      const message = document.getElementById("cartMessage");
+      message.textContent = `${product?.name || "Product"} added to your cart.`;
+      window.setTimeout(() => {
+        if (message.textContent.endsWith("added to your cart.")) message.textContent = "";
+      }, 2500);
+    }
+
+    function selectCategory(category) {
+      document.getElementById("category").value = category;
+      document.getElementById("listings").scrollIntoView({ behavior: "smooth", block: "start" });
+      searchItems();
+    }
+
+    function showEventForm() {
+      const modal = document.getElementById("eventFormModal");
+      modal.hidden = false;
+      document.getElementById("eventFormMessage").textContent = "";
+      document.getElementById("eventFormMessage").className = "auth-message";
+      document.querySelector('#eventForm input[name="title"]').focus();
+    }
+
+    function closeEventForm() {
+      document.getElementById("eventFormModal").hidden = true;
+    }
+
+    async function submitEvent(event) {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const formData = new FormData(form);
+      const values = Object.fromEntries(formData.entries());
+      const message = document.getElementById("eventFormMessage");
+      const submitButton = document.getElementById("submitEventButton");
+
+      if (!values.title.trim() || !values.date || !values.location.trim() || !values.category.trim()) {
+        message.textContent = "Title, date and time, location, and category are required.";
+        message.className = "auth-message error";
+        return;
+      }
+
+      submitButton.disabled = true;
+      message.textContent = "Creating event...";
+      message.className = "auth-message";
+
+      try {
+        const response = await fetch("/api/events", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title: values.title.trim(),
+            description: values.description.trim(),
+            date: values.date,
+            location: values.location.trim(),
+            category: values.category.trim()
+          })
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.message || "Could not create event.");
+
+        closeEventForm();
+        form.reset();
+        window.location.href = "/events.html?created=1";
+      } catch (error) {
+        console.error("Event creation error:", error);
+        message.textContent = error.message || "Unable to create event. Please try again.";
+        message.className = "auth-message error";
+      } finally {
+        submitButton.disabled = false;
+      }
+    }
 
 
     // ==========================================
@@ -481,9 +1091,13 @@
 
 
       if (!items || items.length === 0) {
-
-        container.innerHTML =
-          "<p>No matching listings found. Try another search.";
+        const selectedCollege = document.getElementById("collegeFilter")?.value;
+        const message = document.createElement("p");
+        message.className = "loading";
+        message.textContent = selectedCollege && selectedCollege !== "All Colleges"
+          ? `No items are listed for ${selectedCollege} yet.`
+          : "No matching listings found. Try another search.";
+        container.replaceChildren(message);
 
         return;
       }
@@ -513,6 +1127,10 @@
               ${product.name}
             </h3>
 
+            <p class="college-label">
+              🎓 ${product.college || "College not specified"}
+            </p>
+
             <p>
               ${product.description}
             </p>
@@ -520,6 +1138,12 @@
             <div class="price">
               ₹${product.price}
             </div>
+
+            <button
+              onclick="addToCart(${product.id})"
+            >
+              Add to Cart
+            </button>
 
             <button
               onclick="buyItem(${product.id})"
@@ -556,6 +1180,11 @@
           .getElementById("category")
           .value;
 
+      const college =
+        document
+          .getElementById("collegeFilter")
+          .value;
+
 
       const container =
         document.getElementById("listings");
@@ -577,6 +1206,10 @@
 
         if (category !== "All") {
           params.append("category", category);
+        }
+
+        if (college !== "All Colleges") {
+          params.append("college", college);
         }
 
 
@@ -815,6 +1448,13 @@ function contactSeller(productId) {
     const registerForm = document.getElementById("registerForm");
     const authTabs = document.getElementById("authTabs");
     let currentUser = null;
+
+    document.getElementById("eventForm").addEventListener("submit", submitEvent);
+    document.getElementById("closeEventForm").addEventListener("click", closeEventForm);
+    document.getElementById("cancelEventForm").addEventListener("click", closeEventForm);
+    document.getElementById("listingForm").addEventListener("submit", submitListing);
+    document.getElementById("closeListing").addEventListener("click", closeListingForm);
+    updateCartCount();
 
     function setAuthUser(user) {
       currentUser = user;

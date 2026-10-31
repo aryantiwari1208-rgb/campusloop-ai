@@ -44,6 +44,85 @@ test("health endpoint works without storage", async () => {
     });
 });
 
+test("events page loads with its events API integration", async () => {
+    const pageResponse = await fetch(`${baseUrl}/events.html`);
+    assert.equal(pageResponse.status, 200);
+    const page = await pageResponse.text();
+    assert.match(page, /id="eventsList"/);
+    assert.match(page, /fetch\("\/api\/events"\)/);
+    assert.match(page, /Back to Home/);
+
+    const eventsResponse = await fetch(`${baseUrl}/api/events`);
+    assert.equal(eventsResponse.status, 200);
+    const eventsBody = await eventsResponse.json();
+    assert.equal(eventsBody.status, "success");
+    assert.equal(eventsBody.count, eventsBody.events.length);
+});
+
+test("cart and checkout pages load with local cart controls", async () => {
+    const cartResponse = await fetch(`${baseUrl}/cart.html`);
+    assert.equal(cartResponse.status, 200);
+    const cartPage = await cartResponse.text();
+    assert.match(cartPage, /localStorage/);
+    assert.match(cartPage, /data-action="increase"/);
+    assert.match(cartPage, /Clear Cart/);
+    assert.match(cartPage, /Proceed to Checkout/);
+
+    const checkoutResponse = await fetch(`${baseUrl}/checkout.html`);
+    assert.equal(checkoutResponse.status, 200);
+    assert.match(await checkoutResponse.text(), /payment integration is coming soon/i);
+});
+
+test("homepage requires login before adding products to cart", async () => {
+    const response = await fetch(`${baseUrl}/`);
+    assert.equal(response.status, 200);
+    const page = await response.text();
+    assert.match(page, /Please log in before adding products to your cart/);
+    assert.match(page, /if \(!currentUser\)/);
+});
+
+test("registration requires a supported college", async () => {
+    const response = await fetch(`${baseUrl}/api/auth/register`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+            name: "Student",
+            college: "Unknown College",
+            email: "student@example.com",
+            password: "password123",
+            confirmPassword: "password123"
+        })
+    });
+    assert.equal(response.status, 400);
+    assert.deepEqual(await response.json(), {
+        status: "error",
+        message: "Select a valid college."
+    });
+});
+
+test("college directory requires authentication", async () => {
+    const response = await fetch(`${baseUrl}/api/people/grouped`);
+    assert.equal(response.status, 401);
+    assert.deepEqual(await response.json(), {
+        status: "error",
+        message: "Not authenticated."
+    });
+});
+
+test("college directory page loads", async () => {
+    const response = await fetch(`${baseUrl}/people.html`);
+    assert.equal(response.status, 200);
+    const page = await response.text();
+    assert.match(page, /Campus directory/);
+    assert.match(page, /\/api\/people\/grouped/);
+});
+
+test("college directory route is registered under the API prefix", async () => {
+    const response = await fetch(`${baseUrl}/api/people/grouped`);
+    assert.notEqual(response.status, 404);
+    assert.equal(response.status, 401);
+});
+
 test("registration validates input before calling Supabase Auth", async () => {
     const cases = [
         [{ name: "", email: "student@example.com", password: "password123", confirmPassword: "password123" }, "Name must be between 1 and 80 characters."],
@@ -101,6 +180,55 @@ test("products are available and other storage-backed endpoints report temporary
         index === 0 || new Date(events[index - 1].date) <= new Date(event.date)
     ));
 
+});
+
+test("product APIs validate college filters", async () => {
+    for (const url of ["/api/products?college=Unknown%20College", "/api/products/search?college=Unknown%20College"]) {
+        const response = await fetch(`${baseUrl}${url}`);
+        assert.equal(response.status, 400);
+        assert.deepEqual(await response.json(), {
+            status: "error",
+            message: "Select a valid college."
+        });
+    }
+});
+
+test("product APIs filter BIT Mesra, NIT Patna, and all colleges", async () => {
+    for (const college of ["BIT Mesra", "NIT Patna"]) {
+        const response = await fetch(`${baseUrl}/api/products?college=${encodeURIComponent(college)}`);
+        assert.ok([200, 503].includes(response.status));
+        const body = await response.json();
+        if (response.status === 503) {
+            assert.equal(body.message, "College filtering is unavailable until the products college migration is applied.");
+        } else {
+            assert.equal(body.status, "success");
+            assert.ok(body.products.every(product => product.college === college));
+        }
+    }
+
+    const allResponse = await fetch(`${baseUrl}/api/products?college=All%20Colleges`);
+    assert.equal(allResponse.status, 200);
+    const allBody = await allResponse.json();
+    assert.equal(allBody.status, "success");
+    assert.equal(allBody.count, allBody.products.length);
+});
+
+test("product creation requires authentication before accepting listing data", async () => {
+    const response = await fetch(`${baseUrl}/api/products`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+            name: "Test item",
+            description: "Test description",
+            category: "Books",
+            price: 10
+        })
+    });
+    assert.equal(response.status, 401);
+    assert.deepEqual(await response.json(), {
+        status: "error",
+        message: "Log in before listing an item."
+    });
 });
 
 test("unauthenticated session check returns 401", async () => {
@@ -195,6 +323,25 @@ test("event search rejects non-text filters", async () => {
     assert.deepEqual(await response.json(), {
         status: "error",
         message: "Search and category filters must be text values."
+    });
+});
+
+test("event creation validates required fields before writing", async () => {
+    const response = await fetch(`${baseUrl}/api/events`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+            title: "",
+            description: "Missing required fields",
+            date: "not-a-date",
+            location: "",
+            category: ""
+        })
+    });
+    assert.equal(response.status, 400);
+    assert.deepEqual(await response.json(), {
+        status: "error",
+        message: "Enter a valid title, date, location, and category."
     });
 });
 
