@@ -36,7 +36,7 @@ The project is being developed toward a more intelligent experience with AI-assi
 - AI Listing Assistant: Generate clear product descriptions from basic item details.
 - AI Price Suggestions: Suggest listing prices based on product information.
 - Natural-Language Search: Help students find products using everyday language.
-- Database Integration: Store users, listings, and events in Supabase PostgreSQL.
+- Database Integration: Planned for a future implementation.
 - PayPal Sandbox: Demonstrate a test checkout and payment workflow.
 - Seller Listings: Allow students to create and manage listings.
 
@@ -47,7 +47,7 @@ These features are planned and should be marked complete only after they have be
 - Frontend: HTML, CSS, JavaScript
 - Backend: Node.js, Express.js
 - Hosting: Render
-- Database: Supabase (PostgreSQL)
+- Database: Not configured
 - Planned payments: PayPal Sandbox
 - Planned AI: Free-tier AI API, subject to availability and usage limits
 
@@ -72,12 +72,7 @@ Setup
    
    npm install
 
-4. Create a Supabase project, run `supabase-schema.sql` in its SQL Editor, then set these server environment variables:
-
-   - `DATABASE_URL`: Supabase PostgreSQL connection string (use the pooler URL for hosted deployments when recommended by Supabase).
-   - `SESSION_SECRET`: random secret with at least 32 bytes.
-
-   Keep the database URL private. The app connects directly to PostgreSQL and uses parameterized queries; it does not expose a Supabase service key to the browser.
+4. No environment variables are required for the current non-persistent version.
 
 5. Start the server:
    
@@ -89,9 +84,7 @@ Setup
 
 Make sure "index.html", "server.js", and "package.json" are in the expected locations. Adjust the commands if your repository uses a different folder structure.
 
-The server seeds the sample products and events when their IDs are absent. Existing MongoDB users, products, events, and sessions are not copied automatically; export and import existing records before switching a live deployment. Existing MongoDB passwords can be copied as bcrypt hashes into `users.password_hash`.
-
-To copy MongoDB users, products, and events into the configured PostgreSQL database, set both `MONGODB_URI` and `DATABASE_URL` and run `npm run migrate:mongo`. The migration upserts matching users by email and products/events by ID; review the target first because matching records are updated. It runs in a PostgreSQL transaction and does not remove source MongoDB records. Session records are not transferred, so users will sign in again.
+Marketplace listings, events, and authentication currently return HTTP 503 responses because persistent storage has been removed. The homepage, campus form, and recommendation assistant remain available.
 
 🔒 Security
 

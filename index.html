@@ -384,7 +384,7 @@
     <section class="auth-panel" role="dialog" aria-modal="true" aria-labelledby="authTitle" tabindex="-1">
       <button id="closeAuth" class="auth-close" type="button" aria-label="Close">✕</button>
       <h2 id="authTitle">Log in to CampusLoop</h2>
-      <p>Use your student account to continue.</p>
+      <p>Authentication is temporarily unavailable until storage is configured.</p>
       <div id="authTabs" class="auth-tabs" role="group" aria-label="Account access">
         <button id="loginTab" type="button" aria-pressed="true">Log in</button>
         <button id="registerTab" type="button" aria-pressed="false">Sign up</button>
@@ -443,12 +443,12 @@
         const response =
           await fetch("/api/products");
 
-        if (!response.ok) {
-          throw new Error("Could not load products.");
-        }
-
         const data =
           await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.message || "Could not load products.");
+        }
 
         products =
           data.products || [];
@@ -459,8 +459,10 @@
 
         console.error("Product loading error:", error);
 
-        container.innerHTML =
-          '<p class="error">Unable to load listings. Make sure the CampusLoop server is running.</p>';
+        const message = document.createElement("p");
+        message.className = "error";
+        message.textContent = error.message || "Unable to load listings.";
+        container.replaceChildren(message);
 
       }
     }
@@ -587,13 +589,12 @@
           await fetch(url);
 
 
-        if (!response.ok) {
-          throw new Error("Search request failed.");
-        }
-
-
         const data =
           await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.message || "Search request failed.");
+        }
 
 
         displayProducts(
@@ -605,8 +606,10 @@
 
         console.error("Search error:", error);
 
-        container.innerHTML =
-          '<p class="error">Search failed. Please try again.</p>';
+        const message = document.createElement("p");
+        message.className = "error";
+        message.textContent = error.message || "Search failed. Please try again.";
+        container.replaceChildren(message);
 
       }
 
