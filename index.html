@@ -384,7 +384,7 @@
     <section class="auth-panel" role="dialog" aria-modal="true" aria-labelledby="authTitle" tabindex="-1">
       <button id="closeAuth" class="auth-close" type="button" aria-label="Close">✕</button>
       <h2 id="authTitle">Log in to CampusLoop</h2>
-      <p>Authentication is temporarily unavailable until storage is configured.</p>
+      <p>Use your student account to continue.</p>
       <div id="authTabs" class="auth-tabs" role="group" aria-label="Account access">
         <button id="loginTab" type="button" aria-pressed="true">Log in</button>
         <button id="registerTab" type="button" aria-pressed="false">Sign up</button>
@@ -872,6 +872,7 @@ function contactSeller(productId) {
         loginForm.hidden = true;
         registerForm.hidden = true;
         authTabs.hidden = true;
+        closeAuth();
         showAuthMessage(data.message || "You are signed in.", "success");
       } catch (error) {
         showAuthMessage(error.message || "Authentication failed. Please try again.", "error");
