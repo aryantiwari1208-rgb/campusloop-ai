@@ -15,6 +15,8 @@
     .toolbar h2 { margin: 0; }
     .button { display: inline-block; padding: 13px; border-radius: 9px; background: #087f68; color: white; font-weight: bold; text-decoration: none; }
     .button:hover { background: #066b58; }
+    .directory-search { display: flex; gap: 10px; margin-bottom: 20px; }
+    .directory-search input { flex: 1; min-width: 0; padding: 13px; border: 1px solid #d6ddeb; border-radius: 9px; font-size: 15px; }
     .groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 18px; }
     .group { padding: 20px; border: 1px solid #dce5f1; border-radius: 15px; background: white; box-shadow: 0 4px 16px #17233c0a; }
     .group h3 { margin-top: 0; color: #087f68; }
@@ -33,44 +35,70 @@
       <h2>Campus directory</h2>
       <a class="button" href="/index.html">← Back to Home</a>
     </div>
+    <div class="directory-search">
+      <input id="directorySearch" type="search" placeholder="Search students or colleges..." aria-label="Search directory">
+    </div>
     <p id="message" class="message" role="status" aria-live="polite">Loading college groups...</p>
     <section id="groups" class="groups"></section>
   </main>
   <script>
-    async function loadGroups() {
+    let groups = [];
+
+    function renderGroups(query = "") {
       const message = document.getElementById("message");
       const container = document.getElementById("groups");
+      const normalizedQuery = query.trim().toLowerCase();
+      const filteredGroups = groups
+        .map(group => ({
+          ...group,
+          students: (group.students || []).filter(student =>
+            !normalizedQuery || group.college.toLowerCase().includes(normalizedQuery) ||
+            (student.name || "").toLowerCase().includes(normalizedQuery)
+          )
+        }))
+        .filter(group => group.students.length > 0);
+
+      container.replaceChildren();
+      if (filteredGroups.length === 0) {
+        message.textContent = normalizedQuery
+          ? "No campus members match your search."
+          : "No college groups are available yet.";
+        return;
+      }
+      message.textContent = "";
+      for (const groupData of filteredGroups) {
+        const group = document.createElement("article");
+        group.className = "group";
+        const heading = document.createElement("h3");
+        heading.textContent = `${groupData.college} (${groupData.students.length})`;
+        const list = document.createElement("ul");
+        for (const person of groupData.students) {
+          const item = document.createElement("li");
+          item.textContent = person.name || "Campus member";
+          list.appendChild(item);
+        }
+        group.append(heading, list);
+        container.appendChild(group);
+      }
+    }
+
+    async function loadGroups() {
+      const message = document.getElementById("message");
       try {
         const response = await fetch("/api/people/grouped", { credentials: "same-origin" });
         const data = await response.json();
         if (!response.ok) throw new Error(data.message || "Could not load the directory.");
-        const groups = Array.isArray(data.groups) ? data.groups : [];
-        container.replaceChildren();
-        if (groups.length === 0) {
-          message.textContent = "No college groups are available yet.";
-          return;
-        }
-        message.textContent = "";
-        for (const groupData of groups) {
-          const group = document.createElement("article");
-          group.className = "group";
-          const heading = document.createElement("h3");
-          heading.textContent = `${groupData.college} (${groupData.count})`;
-          const list = document.createElement("ul");
-          for (const person of groupData.students || []) {
-            const item = document.createElement("li");
-            item.textContent = person.name || "Campus member";
-            list.appendChild(item);
-          }
-          group.append(heading, list);
-          container.appendChild(group);
-        }
+        groups = Array.isArray(data.groups) ? data.groups : [];
+        renderGroups(document.getElementById("directorySearch").value);
       } catch (error) {
         console.error("Directory loading error:", error);
         message.className = "error";
         message.textContent = error.message || "Unable to load the directory.";
       }
     }
+    document.getElementById("directorySearch").addEventListener("input", event => {
+      renderGroups(event.target.value);
+    });
     loadGroups();
   </script>
 </body>

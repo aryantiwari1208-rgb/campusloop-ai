@@ -79,6 +79,12 @@ test("homepage requires login before adding products to cart", async () => {
     const page = await response.text();
     assert.match(page, /Please log in before adding products to your cart/);
     assert.match(page, /if \(!currentUser\)/);
+    assert.match(page, /id="directoryLink"[^>]+hidden/);
+    assert.match(page, /currentUser \? `/);
+    assert.match(page, /function closeListingForm\(\)/);
+    assert.match(page, /\.listing-panel \{ color: #17233c; \}/);
+    assert.match(page, /<select name="category" required>/);
+    assert.match(page, /name="price" type="number" min="0" max="10000000" step="1"/);
 });
 
 test("registration requires a supported college", async () => {
@@ -115,6 +121,7 @@ test("college directory page loads", async () => {
     const page = await response.text();
     assert.match(page, /Campus directory/);
     assert.match(page, /\/api\/people\/grouped/);
+    assert.match(page, /directorySearch/);
 });
 
 test("college directory route is registered under the API prefix", async () => {
@@ -161,6 +168,12 @@ test("login validates input before calling Supabase Auth", async () => {
             message: "Enter a valid email and password."
         });
     }
+});
+
+test("login profile lookup has a legacy-field fallback when college is unavailable", async () => {
+    const serverSource = require("node:fs").readFileSync(path.join(root, "server.js"), "utf8");
+    assert.match(serverSource, /getProfileById/);
+    assert.match(serverSource, /select\("name,email"\)/);
 });
 
 test("products are available and other storage-backed endpoints report temporary unavailability", async () => {
@@ -229,6 +242,11 @@ test("product creation requires authentication before accepting listing data", a
         status: "error",
         message: "Log in before listing an item."
     });
+});
+
+test("product listings use whole-rupee prices", async () => {
+    const serverSource = require("node:fs").readFileSync(path.join(root, "server.js"), "utf8");
+    assert.match(serverSource, /!Number\.isInteger\(price\)/);
 });
 
 test("unauthenticated session check returns 401", async () => {

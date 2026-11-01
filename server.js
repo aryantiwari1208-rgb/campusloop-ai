@@ -26,6 +26,27 @@ const colleges = [
 function missingCollegeColumn(error) {
     return /column .*college does not exist/i.test(error?.message || "");
 }
+
+async function getProfileById(userId) {
+    const profileResult = await supabase
+        .from("profiles")
+        .select("name,email,college")
+        .eq("id", userId)
+        .maybeSingle();
+
+    if (!missingCollegeColumn(profileResult.error)) return profileResult;
+
+    console.warn("Profiles college column is unavailable; using legacy profile fields.");
+    return supabase
+        .from("profiles")
+        .select("name,email")
+        .eq("id", userId)
+        .maybeSingle()
+        .then(result => ({
+            data: result.data ? { ...result.data, college: null } : result.data,
+            error: result.error
+        }));
+}
 async function testSupabaseConnection() {
     const { data, error } = await supabase
         .from('products')
@@ -323,11 +344,7 @@ app.post("/api/auth/login", async (req, res) => {
             });
         }
 
-        const { data: profile, error: profileError } = await supabase
-            .from("profiles")
-            .select("name,email,college")
-            .eq("id", data.user.id)
-            .maybeSingle();
+        const { data: profile, error: profileError } = await getProfileById(data.user.id);
 
         if (profileError) {
             console.error("Login profile lookup error:", profileError.message);
@@ -366,11 +383,7 @@ app.get("/api/auth/me", async (req, res) => {
             });
         }
 
-        const { data: profile, error } = await supabase
-            .from("profiles")
-            .select("name,email,college")
-            .eq("id", authUser.id)
-            .maybeSingle();
+        const { data: profile, error } = await getProfileById(authUser.id);
 
         if (error) {
             console.error("Session profile lookup error:", error.message);
@@ -425,7 +438,8 @@ app.post("/api/products", async (req, res) => {
 
         if (!name || name.length > 120 || description.length > 2000 ||
             !category || category.length > 80 || !Number.isFinite(price) ||
-            price < 0 || price > 10000000 || !/^\S+$/.test(icon)) {
+            !Number.isInteger(price) || price < 0 || price > 10000000 ||
+            !/^\S+$/.test(icon)) {
             return res.status(400).json({
                 status: "error",
                 message: "Enter a valid item name, description, category, and price."

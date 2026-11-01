@@ -42,63 +42,6 @@
       color: #17233c;
     }
 
-    function showListingForm() {
-      if (!currentUser) {
-        showAuth("login");
-        showAuthMessage("Please log in before listing an item.", "error");
-        return;
-      }
-      document.getElementById("listingModal").hidden = false;
-      document.querySelector('#listingForm input[name="name"]').focus();
-    }
-
-    function closeListingForm() {
-      document.getElementById("listingModal").hidden = true;
-    }
-
-    async function submitListing(event) {
-      event.preventDefault();
-      const form = event.currentTarget;
-      const values = Object.fromEntries(new FormData(form).entries());
-      const message = document.getElementById("listingMessage");
-      const button = document.getElementById("submitListing");
-      if (!values.name.trim() || !values.category.trim() || !values.price ||
-          Number(values.price) < 0) {
-        message.textContent = "Name, category, and a valid price are required.";
-        message.className = "auth-message error";
-        return;
-      }
-      button.disabled = true;
-      message.textContent = "Listing item...";
-      try {
-        const response = await fetch("/api/products", {
-          method: "POST",
-          credentials: "same-origin",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            name: values.name.trim(),
-            description: values.description.trim(),
-            category: values.category.trim(),
-            price: Number(values.price),
-            icon: values.icon.trim() || "📦"
-          })
-        });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.message || "Could not list item.");
-        closeListingForm();
-        form.reset();
-        loadProducts();
-        const cartMessage = document.getElementById("cartMessage");
-        cartMessage.textContent = "Item listed successfully.";
-      } catch (error) {
-        console.error("Listing error:", error);
-        message.textContent = error.message || "Unable to list item.";
-        message.className = "auth-message error";
-      } finally {
-        button.disabled = false;
-      }
-    }
-
     header {
       position: sticky;
       top: 0;
@@ -578,6 +521,14 @@
     .auth-message { min-height: 22px; margin: 14px 0 0; line-height: 1.45; }
     .auth-message.error { color: #b42318; }
     .auth-message.success { color: #087f68; }
+    .listing-panel { color: #17233c; }
+    .listing-panel > p { color: #65718a; margin-top: 0; }
+    .listing-panel input,
+    .listing-panel textarea,
+    .listing-panel select {
+      color: #17233c;
+      background: #fff;
+    }
     @media (max-width: 600px) {
       header { align-items: flex-start; }
       .auth-nav { width: 100%; }
@@ -610,7 +561,7 @@
     <a class="cart-link" href="/cart.html" aria-label="Shopping cart">
       🛒 Cart <span id="cartCount" class="cart-count">0</span>
     </a>
-    <a class="button" href="/people.html">Campus Directory</a>
+    <a id="directoryLink" class="button" href="/people.html" hidden>Campus Directory</a>
     <span id="authWelcome" class="auth-welcome" hidden></span>
     <button id="openLogin" class="auth-secondary" type="button">Log in</button>
     <button id="openRegister" type="button">Sign up</button>
@@ -653,10 +604,15 @@
         <textarea name="description" maxlength="2000"></textarea>
       </label>
       <label>Category
-        <input name="category" type="text" maxlength="80" required>
+        <select name="category" required>
+          <option value="">Select a category</option>
+          <option value="Books">Books</option>
+          <option value="Electronics">Electronics</option>
+          <option value="Lab">Lab equipment</option>
+        </select>
       </label>
       <label>Price (₹)
-        <input name="price" type="number" min="0" max="10000000" step="0.01" required>
+        <input name="price" type="number" min="0" max="10000000" step="1" inputmode="numeric" required>
       </label>
       <label>Icon
         <input name="icon" type="text" maxlength="4" value="📦">
@@ -978,6 +934,63 @@
       searchItems();
     }
 
+    function showListingForm() {
+      if (!currentUser) {
+        showAuth("login");
+        showAuthMessage("Please log in before listing an item.", "error");
+        return;
+      }
+      document.getElementById("listingModal").hidden = false;
+      document.querySelector('#listingForm input[name="name"]').focus();
+    }
+
+    function closeListingForm() {
+      document.getElementById("listingModal").hidden = true;
+    }
+
+    async function submitListing(event) {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const values = Object.fromEntries(new FormData(form).entries());
+      const message = document.getElementById("listingMessage");
+      const button = document.getElementById("submitListing");
+      const price = Number(values.price);
+      if (!values.name.trim() || !values.category.trim() || values.price === "" ||
+          !Number.isInteger(price) || price < 0) {
+        message.textContent = "Name, category, and a valid price are required.";
+        message.className = "auth-message error";
+        return;
+      }
+      button.disabled = true;
+      message.textContent = "Listing item...";
+      try {
+        const response = await fetch("/api/products", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: values.name.trim(),
+            description: values.description.trim(),
+            category: values.category.trim(),
+            price,
+            icon: values.icon.trim() || "📦"
+          })
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.message || "Could not list item.");
+        closeListingForm();
+        form.reset();
+        loadProducts();
+        document.getElementById("cartMessage").textContent = "Item listed successfully.";
+      } catch (error) {
+        console.error("Listing error:", error);
+        message.textContent = error.message || "Unable to list item.";
+        message.className = "auth-message error";
+      } finally {
+        button.disabled = false;
+      }
+    }
+
     function showEventForm() {
       const modal = document.getElementById("eventFormModal");
       modal.hidden = false;
@@ -1139,11 +1152,11 @@
               ₹${product.price}
             </div>
 
-            <button
-              onclick="addToCart(${product.id})"
-            >
-              Add to Cart
-            </button>
+            ${currentUser ? `
+              <button onclick="addToCart(${product.id})">
+                Add to Cart
+              </button>
+            ` : ""}
 
             <button
               onclick="buyItem(${product.id})"
@@ -1461,9 +1474,11 @@ function contactSeller(productId) {
       const welcome = document.getElementById("authWelcome");
       welcome.textContent = user ? "Hi, " + user.name : "";
       welcome.hidden = !user;
+      document.getElementById("directoryLink").hidden = !user;
       document.getElementById("openLogin").hidden = !!user;
       document.getElementById("openRegister").hidden = !!user;
       document.getElementById("logoutButton").hidden = !user;
+      if (products.length) displayProducts(products);
     }
 
     function showAuth(mode) {
