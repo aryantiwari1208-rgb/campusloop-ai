@@ -88,12 +88,37 @@
       color: #65718a;
       padding: 25px;
     }
+    :root { --navy: #10234e; --blue: #294b87; --ink: #14213d; --muted: #64748b; --line: #dce4f2; --canvas: #fff; }
+    body { background: var(--canvas); color: var(--ink); font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
+    header { position: sticky; top: 0; z-index: 3; padding: 14px 6%; background: var(--navy); border-bottom: 1px solid #ffffff1f; }
+    header h1 { font-size: 22px; letter-spacing: -.8px; }
+    header > div { margin-right: auto; color: #b8cec5; font-size: 13px; }
+    header nav { display: flex; gap: 6px; flex-wrap: wrap; }
+    header nav a { padding: 9px 12px; border-radius: 8px; color: #e3f0ea; font-size: 13px; font-weight: 700; text-decoration: none; }
+    header nav a:hover { background: #ffffff1a; }
+    main { max-width: 1180px; margin: auto; padding: 42px 6%; }
+    .toolbar { padding-bottom: 22px; border-bottom: 1px solid var(--line); }
+    .toolbar h2 { color: var(--ink); letter-spacing: -.6px; }
+    .button, button { background: var(--navy); }
+    .button:hover, button:hover { background: var(--blue); }
+    .event-card { border-color: var(--line); border-radius: 12px; box-shadow: 0 7px 22px #10234e0b; transition: transform 160ms ease, box-shadow 160ms ease; }
+    .event-card:hover { transform: translateY(-3px); box-shadow: 0 14px 28px #10234e14; }
+    .tag { background: #ddf3e5; color: #23613e; }
+    .event-meta, .event-description { color: var(--muted); }
+    @media (max-width: 700px) { header > div { display: none; } header nav { width: 100%; } main { padding-top: 28px; } }
   </style>
 </head>
 <body>
   <header>
     <h1>Campus<span>Loop</span> AI</h1>
     <div>Student Marketplace · Buy Smart, Reuse More</div>
+    <nav aria-label="Main navigation">
+      <a href="/products.html">Marketplace</a>
+      <a href="/events.html">Events</a>
+      <a href="/people.html">Campus Directory</a>
+      <a href="/cart.html">🛒 Cart <span id="cartCount">0</span></a>
+      <a href="/index.html#account">Account</a>
+    </nav>
   </header>
 
   <main>
@@ -181,6 +206,12 @@
     }
 
     loadEvents();
+    try {
+      const cart = JSON.parse(localStorage.getItem("campusloop.cart") || "[]");
+      document.getElementById("cartCount").textContent = Array.isArray(cart)
+        ? cart.reduce((total, item) => total + (Number.isInteger(item.quantity) ? item.quantity : 0), 0)
+        : 0;
+    } catch {}
   </script>
 </body>
 </html>

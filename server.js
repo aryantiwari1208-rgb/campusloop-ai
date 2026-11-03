@@ -1,4 +1,5 @@
 const express = require("express");
+const crypto = require("crypto");
 require('dotenv').config();
 
 const { createClient } = require('@supabase/supabase-js');
@@ -23,6 +24,7 @@ const colleges = [
     "Patna University",
     "AIIMS Patna"
 ];
+const marketplaceCollege = "Birla Institute of Technology, Patna";
 function missingCollegeColumn(error) {
     return /column .*college does not exist/i.test(error?.message || "");
 }
@@ -72,7 +74,7 @@ if (process.env.NODE_ENV === "production") {
 const PORT = Number(process.env.PORT) || 3000;
 const websiteFolder = __dirname;
 
-app.use(express.json());
+app.use(express.json({ limit: "8mb" }));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(websiteFolder));
 
@@ -93,32 +95,29 @@ app.get("/api/health", (req, res) => {
 
 app.get("/api/products", async (req, res) => {
     try {
-        const college = typeof req.query.college === "string" ? req.query.college.trim() : "";
-        if (college && college !== "All Colleges" && !colleges.includes(college)) {
-            return res.status(400).json({
-                status: "error",
-                message: "Select a valid college."
-            });
-        }
-
         let productsQuery = supabase
             .from("products")
             .select("*")
+            .eq("college", marketplaceCollege)
             .order("created_at", { ascending: false, nullsFirst: false })
             .order("id", { ascending: false });
-        if (college && college !== "All Colleges") {
-            productsQuery = productsQuery.eq("college", college);
-        }
 
         const { data, error } = await productsQuery;
 
         if (error) {
             console.error("Products error:", error.message);
-            if (college && college !== "All Colleges" && missingCollegeColumn(error)) {
-                return res.status(503).json({
-                    status: "error",
-                    message: "College filtering is unavailable until the products college migration is applied."
-                });
+            if (missingCollegeColumn(error)) {
+                const legacyResult = await supabase
+                    .from("products")
+                    .select("*")
+                    .order("id", { ascending: false });
+                if (!legacyResult.error) {
+                    return res.json({
+                        status: "success",
+                        count: legacyResult.data.length,
+                        products: legacyResult.data
+                    });
+                }
             }
             return res.status(500).json({
                 status: "error",
@@ -435,14 +434,18 @@ app.post("/api/products", async (req, res) => {
         const category = typeof body.category === "string" ? body.category.trim() : "";
         const icon = typeof body.icon === "string" ? body.icon.trim() : "📦";
         const price = typeof body.price === "number" ? body.price : Number(body.price);
+        const imageData = typeof body.imageData === "string" ? body.imageData : "";
+        const imageMatch = imageData.match(/^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/);
+        const imageBuffer = imageMatch ? Buffer.from(imageMatch[2], "base64") : null;
 
         if (!name || name.length > 120 || description.length > 2000 ||
             !category || category.length > 80 || !Number.isFinite(price) ||
             !Number.isInteger(price) || price < 0 || price > 10000000 ||
-            !/^\S+$/.test(icon)) {
+            !/^\S+$/.test(icon) || !imageBuffer || imageBuffer.length === 0 ||
+            imageBuffer.length > 5 * 1024 * 1024) {
             return res.status(400).json({
                 status: "error",
-                message: "Enter a valid item name, description, category, and price."
+                message: "Enter valid item details and upload a JPG, PNG, or WebP photo up to 5 MB."
             });
         }
 
@@ -458,12 +461,31 @@ app.post("/api/products", async (req, res) => {
                 message: "Could not determine your college."
             });
         }
-        if (!profile?.college || !colleges.includes(profile.college)) {
+        if (profile?.college !== marketplaceCollege) {
             return res.status(400).json({
                 status: "error",
-                message: "Add a valid college to your profile before listing an item."
+                message: `Listings are currently available only for ${marketplaceCollege}.`
             });
         }
+
+        const extension = imageMatch[1] === "image/jpeg" ? "jpg" : imageMatch[1].slice(6);
+        const imagePath = `${authUser.id}/${crypto.randomUUID()}.${extension}`;
+        const uploadResult = await supabase.storage
+            .from("product-images")
+            .upload(imagePath, imageBuffer, {
+                contentType: imageMatch[1],
+                upsert: false
+            });
+        if (uploadResult.error) {
+            console.error("Product image upload error:", uploadResult.error.message);
+            return res.status(503).json({
+                status: "error",
+                message: "Photo storage is not configured yet."
+            });
+        }
+        const { data: publicImage } = supabase.storage
+            .from("product-images")
+            .getPublicUrl(imagePath);
 
         const { data, error } = await supabase
             .from("products")
@@ -473,7 +495,8 @@ app.post("/api/products", async (req, res) => {
                 category,
                 price,
                 icon,
-                college: profile.college
+                college: profile.college,
+                image_url: publicImage.publicUrl
             })
             .select("*")
             .single();
@@ -557,18 +580,12 @@ app.get("/api/people/grouped", async (req, res) => {
 app.get("/api/products/search", async (req, res) => {
     const searchTerm = typeof req.query.q === "string" ? req.query.q.trim() : "";
     const category = typeof req.query.category === "string" ? req.query.category.trim() : "";
-    const college = typeof req.query.college === "string" ? req.query.college.trim() : "";
-    if (college && college !== "All Colleges" && !colleges.includes(college)) {
-        return res.status(400).json({
-            status: "error",
-            message: "Select a valid college."
-        });
-    }
 
     try {
         let productsQuery = supabase
             .from("products")
             .select("*")
+            .eq("college", marketplaceCollege)
             .order("created_at", { ascending: false, nullsFirst: false })
             .order("id", { ascending: false });
 
@@ -580,18 +597,27 @@ app.get("/api/products/search", async (req, res) => {
         if (category && category !== "All") {
             productsQuery = productsQuery.eq("category", category);
         }
-        if (college && college !== "All Colleges") {
-            productsQuery = productsQuery.eq("college", college);
-        }
-
         const { data, error } = await productsQuery;
         if (error) {
             console.error("Product search error:", error.message);
-            if (college && college !== "All Colleges" && missingCollegeColumn(error)) {
-                return res.status(503).json({
-                    status: "error",
-                    message: "College filtering is unavailable until the products college migration is applied."
-                });
+            if (missingCollegeColumn(error)) {
+                let legacyQuery = supabase
+                    .from("products")
+                    .select("*")
+                    .order("id", { ascending: false });
+                if (searchTerm) {
+                    const safeSearchTerm = searchTerm.replace(/[(),\\]/g, " ");
+                    legacyQuery = legacyQuery.or(`name.ilike.%${safeSearchTerm}%,description.ilike.%${safeSearchTerm}%`);
+                }
+                if (category && category !== "All") legacyQuery = legacyQuery.eq("category", category);
+                const legacyResult = await legacyQuery;
+                if (!legacyResult.error) {
+                    return res.json({
+                        status: "success",
+                        count: legacyResult.data.length,
+                        products: legacyResult.data
+                    });
+                }
             }
             return res.status(500).json({
                 status: "error",
@@ -866,6 +892,12 @@ app.use("/api", (req, res) => {
 
 app.use((err, req, res, next) => {
     console.error(err);
+    if (err.type === "entity.too.large") {
+        return res.status(413).json({
+            status: "error",
+            message: "The uploaded photo is too large. Choose an image up to 5 MB."
+        });
+    }
     res.status(500).json({
         status: "error",
         message: "Something went wrong on the server."

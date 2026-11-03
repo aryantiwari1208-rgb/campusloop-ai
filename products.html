@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Marketplace | CampusLoop AI</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: Inter, system-ui, sans-serif; background: #f7fafc; color: #17233c; }
+    header { background: #122344; color: white; padding: 18px 7%; display: flex; justify-content: space-between; gap: 14px; align-items: center; flex-wrap: wrap; }
+    header h1 { margin: 0; font-size: 24px; } header span { color: #72e2c0; }
+    nav { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    a, button { border: 0; border-radius: 9px; padding: 11px 14px; font: inherit; font-weight: 700; text-decoration: none; cursor: pointer; }
+    nav a, nav button { background: #087f68; color: white; } nav .secondary { background: transparent; border: 1px solid #9fb1cc; }
+    main { padding: 34px 7%; } .toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 22px; }
+    .toolbar h2 { margin: 0 auto 0 0; } input, select { padding: 12px; border: 1px solid #d6ddeb; border-radius: 9px; font: inherit; }
+    .search { display: flex; gap: 8px; } .search input { min-width: 260px; } .search button, .card button { background: #087f68; color: white; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px; }
+    .card { display: flex; flex-direction: column; background: white; border: 1px solid #e5eaf2; border-radius: 15px; overflow: hidden; box-shadow: 0 4px 16px #17233c0a; }
+    .picture { height: 145px; display: grid; place-items: center; font-size: 60px; background: #e4edfa; overflow: hidden; }
+    .picture img { width: 100%; height: 100%; object-fit: cover; }
+    .details { display: flex; flex: 1; flex-direction: column; padding: 17px; } .details h3 { min-height: 52px; margin: 10px 0 8px; } .details p { min-height: 42px; margin: 0; color: #65718a; font-size: 14px; }
+    .tag { display: inline-block; background: #e1f7ef; color: #087f68; padding: 5px 9px; border-radius: 20px; font-size: 12px; }
+    .price { font-size: 21px; font-weight: 700; margin: 15px 0; } .card button { width: 100%; margin-top: auto; }
+    .message { color: #65718a; } .error { color: #b42318; }
+    @media (max-width: 520px) { .search { width: 100%; } .search input { min-width: 0; flex: 1; } }
+    :root { --navy: #10234e; --blue: #294b87; --ink: #14213d; --muted: #64748b; --line: #dce4f2; --canvas: #fff; }
+    body { background: var(--canvas); color: var(--ink); }
+    header { position: sticky; top: 0; z-index: 3; padding: 14px 6%; background: var(--navy); border-bottom: 1px solid #ffffff1f; }
+    header h1 { font-size: 22px; letter-spacing: -.8px; }
+    header nav a { padding: 9px 12px; border-radius: 8px; color: #e3f0ea; font-size: 13px; }
+    header nav a:hover { background: #ffffff1a; }
+    main { max-width: 1180px; margin: auto; padding: 42px 6%; }
+    .card { border-color: var(--line); box-shadow: 0 7px 22px #10234e0b; transition: transform 160ms ease, box-shadow 160ms ease; }
+    .card:hover { transform: translateY(-3px); box-shadow: 0 14px 28px #10234e14; }
+    .card button, .search button { background: var(--navy); }
+    .card button:hover, .search button:hover { background: var(--blue); }
+    @media (max-width: 700px) { header nav { width: 100%; } main { padding-top: 28px; } }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Campus<span>Loop</span> AI</h1>
+    <nav>
+      <a href="/index.html">Home</a>
+      <a href="/products.html">Marketplace</a>
+      <a href="/events.html">Events</a>
+      <a href="/people.html">Campus Directory</a>
+      <a href="/cart.html">🛒 Cart <span id="cartCount">0</span></a>
+      <a href="/index.html#account">Account</a>
+    </nav>
+  </header>
+  <main>
+    <div class="toolbar">
+      <h2>BIT Patna Marketplace</h2>
+      <a href="/events.html">📅 All Events</a>
+      <div class="search">
+        <input id="searchInput" placeholder="Search products..." aria-label="Search products">
+        <button id="searchButton" type="button">Search</button>
+      </div>
+      <select id="category" aria-label="Filter by category">
+        <option value="All">All categories</option>
+        <option value="Books">Books</option>
+        <option value="Electronics">Electronics</option>
+        <option value="Lab">Lab equipment</option>
+      </select>
+    </div>
+    <p class="message" id="message" role="status" aria-live="polite">Loading products...</p>
+    <div class="grid" id="listings"></div>
+  </main>
+  <script>
+    let currentUser = null;
+    const listingContainer = document.getElementById("listings");
+    const message = document.getElementById("message");
+    function getCart() {
+      try {
+        const value = JSON.parse(localStorage.getItem("campusloop.cart") || "[]");
+        return Array.isArray(value) ? value.filter(item => Number.isInteger(item.id) && Number.isInteger(item.quantity) && item.quantity > 0) : [];
+      } catch { return []; }
+    }
+    function updateCartCount() {
+      document.getElementById("cartCount").textContent = getCart().reduce((sum, item) => sum + item.quantity, 0);
+    }
+    function addToCart(id) {
+      if (!currentUser) {
+        window.location.href = "/index.html";
+        return;
+      }
+      const cart = getCart();
+      const item = cart.find(entry => entry.id === id);
+      if (item) item.quantity += 1; else cart.push({ id, quantity: 1 });
+      localStorage.setItem("campusloop.cart", JSON.stringify(cart));
+      updateCartCount();
+      message.textContent = "Item added to your cart.";
+    }
+    function renderProducts(products) {
+      listingContainer.replaceChildren();
+      if (!products.length) {
+        message.textContent = "No products found. Try another search.";
+        return;
+      }
+      message.textContent = "";
+      products.forEach(product => {
+        const card = document.createElement("article");
+        card.className = "card";
+        const image = product.image_url
+          ? `<img src="${product.image_url}" alt="${product.name}">`
+          : (product.icon || "📦");
+        card.innerHTML = `<div class="picture">${image}</div><div class="details"><span class="tag">${product.category}</span><h3>${product.name}</h3><p>${product.description || "No description provided."}</p><div class="price">₹${product.price}</div><button type="button">Add to Cart</button></div>`;
+        card.querySelector("button").addEventListener("click", () => addToCart(product.id));
+        listingContainer.appendChild(card);
+      });
+    }
+    async function loadProducts() {
+      const params = new URLSearchParams();
+      const query = document.getElementById("searchInput").value.trim();
+      const category = document.getElementById("category").value;
+      if (query) params.set("q", query);
+      if (category !== "All") params.set("category", category);
+      message.textContent = "Loading products...";
+      try {
+        const response = await fetch(`/api/products/search?${params}`);
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.message || "Could not load products.");
+        renderProducts(data.products || []);
+      } catch (error) {
+        listingContainer.replaceChildren();
+        message.className = "message error";
+        message.textContent = error.message;
+      }
+    }
+    async function checkSession() {
+      const response = await fetch("/api/auth/me", { credentials: "same-origin" });
+      if (response.ok) { const data = await response.json(); currentUser = data.user; }
+    }
+    document.getElementById("searchButton").addEventListener("click", loadProducts);
+    document.getElementById("searchInput").addEventListener("keydown", event => { if (event.key === "Enter") loadProducts(); });
+    document.getElementById("category").addEventListener("change", loadProducts);
+    const initialCategory = new URLSearchParams(location.search).get("category");
+    if (["Books", "Electronics", "Lab"].includes(initialCategory)) document.getElementById("category").value = initialCategory;
+    updateCartCount();
+    checkSession().finally(loadProducts);
+  </script>
+</body>
+</html>

@@ -51,12 +51,24 @@ test("events page loads with its events API integration", async () => {
     assert.match(page, /id="eventsList"/);
     assert.match(page, /fetch\("\/api\/events"\)/);
     assert.match(page, /Back to Home/);
+    assert.match(page, /href="\/products\.html">Marketplace/);
+    assert.match(page, /id="cartCount"/);
 
     const eventsResponse = await fetch(`${baseUrl}/api/events`);
     assert.equal(eventsResponse.status, 200);
     const eventsBody = await eventsResponse.json();
     assert.equal(eventsBody.status, "success");
     assert.equal(eventsBody.count, eventsBody.events.length);
+});
+
+test("products page loads with single-college marketplace navigation", async () => {
+    const response = await fetch(`${baseUrl}/products.html`);
+    assert.equal(response.status, 200);
+    const page = await response.text();
+    assert.match(page, /BIT Patna Marketplace/);
+    assert.match(page, /\/api\/products\/search/);
+    assert.match(page, /display: flex; flex-direction: column/);
+    assert.match(page, /margin-top: auto/);
 });
 
 test("cart and checkout pages load with local cart controls", async () => {
@@ -85,6 +97,24 @@ test("homepage requires login before adding products to cart", async () => {
     assert.match(page, /\.listing-panel \{ color: #17233c; \}/);
     assert.match(page, /<select name="category" required>/);
     assert.match(page, /name="price" type="number" min="0" max="10000000" step="1"/);
+    assert.doesNotMatch(page, /```/);
+    assert.match(page, /name="photo" type="file"/);
+    assert.match(page, /id="cancelListing"/);
+    assert.match(page, /href="\/products\.html">Marketplace/);
+    assert.match(page, /href="\/events\.html">Events/);
+    assert.match(page, /homepageSearchButton/);
+    assert.match(page, /id="homeProductGrid"/);
+    assert.match(page, /id="homeEventGrid"/);
+    assert.match(page, /fetch\("\/api\/events"\)/);
+    assert.match(page, /function renderHomeProducts/);
+    assert.match(page, /function renderHomeEvents/);
+    assert.match(page, /id="account"/);
+    assert.match(page, /@media \(max-width: 1250px\)/);
+    assert.match(page, /Your Campus\.<br>Your Community\./);
+    assert.match(page, /Popular Campus Items/);
+    assert.match(page, /Upcoming Events/);
+    assert.match(page, /Explore Our Campus Community/);
+    assert.match(page, /--navy: #10234e/);
 });
 
 test("registration requires a supported college", async () => {
@@ -122,6 +152,8 @@ test("college directory page loads", async () => {
     assert.match(page, /Campus directory/);
     assert.match(page, /\/api\/people\/grouped/);
     assert.match(page, /directorySearch/);
+    assert.match(page, /href="\/cart\.html">🛒 Cart/);
+    assert.match(page, /href="\/index\.html#account">Account/);
 });
 
 test("college directory route is registered under the API prefix", async () => {
@@ -195,35 +227,11 @@ test("products are available and other storage-backed endpoints report temporary
 
 });
 
-test("product APIs validate college filters", async () => {
-    for (const url of ["/api/products?college=Unknown%20College", "/api/products/search?college=Unknown%20College"]) {
-        const response = await fetch(`${baseUrl}${url}`);
-        assert.equal(response.status, 400);
-        assert.deepEqual(await response.json(), {
-            status: "error",
-            message: "Select a valid college."
-        });
-    }
-});
-
-test("product APIs filter BIT Mesra, NIT Patna, and all colleges", async () => {
-    for (const college of ["BIT Mesra", "NIT Patna"]) {
-        const response = await fetch(`${baseUrl}/api/products?college=${encodeURIComponent(college)}`);
-        assert.ok([200, 503].includes(response.status));
-        const body = await response.json();
-        if (response.status === 503) {
-            assert.equal(body.message, "College filtering is unavailable until the products college migration is applied.");
-        } else {
-            assert.equal(body.status, "success");
-            assert.ok(body.products.every(product => product.college === college));
-        }
-    }
-
-    const allResponse = await fetch(`${baseUrl}/api/products?college=All%20Colleges`);
-    assert.equal(allResponse.status, 200);
-    const allBody = await allResponse.json();
-    assert.equal(allBody.status, "success");
-    assert.equal(allBody.count, allBody.products.length);
+test("product APIs use one marketplace college and ignore college query filters", async () => {
+    const source = require("node:fs").readFileSync(path.join(root, "server.js"), "utf8");
+    assert.match(source, /marketplaceCollege = "Birla Institute of Technology, Patna"/);
+    const page = await (await fetch(`${baseUrl}/`)).text();
+    assert.doesNotMatch(page, /id="collegeFilter"/);
 });
 
 test("product creation requires authentication before accepting listing data", async () => {
@@ -247,6 +255,9 @@ test("product creation requires authentication before accepting listing data", a
 test("product listings use whole-rupee prices", async () => {
     const serverSource = require("node:fs").readFileSync(path.join(root, "server.js"), "utf8");
     assert.match(serverSource, /!Number\.isInteger\(price\)/);
+    assert.match(serverSource, /product-images/);
+    assert.match(serverSource, /express\.json\(\{ limit: "8mb" \}\)/);
+    assert.match(serverSource, /entity\.too\.large/);
 });
 
 test("unauthenticated session check returns 401", async () => {
