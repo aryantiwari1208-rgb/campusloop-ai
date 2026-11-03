@@ -92,7 +92,9 @@ test("homepage requires login before adding products to cart", async () => {
     assert.match(page, /Please log in before adding products to your cart/);
     assert.match(page, /if \(!currentUser\)/);
     assert.match(page, /id="directoryLink"[^>]+hidden/);
-    assert.match(page, /currentUser \? `/);
+    assert.match(page, /button\.textContent = currentUser \? "Add to Cart" : "Log in to add"/);
+    assert.match(page, /getSafeProductImageUrl/);
+    assert.doesNotMatch(page, /onclick="addToCart/);
     assert.match(page, /function closeListingForm\(\)/);
     assert.match(page, /\.listing-panel \{ color: #17233c; \}/);
     assert.match(page, /<select name="category" required>/);

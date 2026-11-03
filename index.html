@@ -1135,6 +1135,46 @@
       .directory-promo { display: block; margin-right: 6%; margin-left: 6%; }
       .directory-promo .button { display: inline-block; margin-top: 16px; }
     }
+    .mobile-menu-toggle { display: none; }
+    @media (max-width: 760px) {
+      .mobile-menu-toggle {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 42px;
+        min-height: 38px;
+        padding: 8px 11px;
+        background: transparent;
+        border: 1px solid #ffffff55;
+        color: #fff;
+      }
+      .auth-nav {
+        position: relative;
+        width: auto;
+        margin-left: auto;
+        justify-content: flex-end;
+      }
+      .auth-nav > a,
+      .auth-nav > span,
+      .auth-nav > button:not(.mobile-menu-toggle) {
+        display: none;
+        width: 100%;
+      }
+      .auth-nav[data-mobile-open="true"] > a,
+      .auth-nav[data-mobile-open="true"] > span,
+      .auth-nav[data-mobile-open="true"] > button:not(.mobile-menu-toggle) {
+        display: block;
+      }
+      .auth-nav[data-mobile-open="true"] {
+        width: 100%;
+        padding-top: 8px;
+      }
+      .auth-nav[data-mobile-open="true"] .mobile-menu-toggle {
+        position: absolute;
+        top: 0;
+        right: 0;
+      }
+    }
   </style>
 
 </head>
@@ -1157,7 +1197,8 @@
 
 
 
-  <nav class="auth-nav" aria-label="Main navigation">
+  <nav id="mainNavigation" class="auth-nav" aria-label="Main navigation" data-mobile-open="false">
+    <button id="mobileMenuToggle" class="mobile-menu-toggle" type="button" aria-expanded="false" aria-controls="mainNavigation" aria-label="Open navigation menu">☰</button>
     <a class="nav-link" href="/products.html">Marketplace</a>
     <a class="nav-link" href="/events.html">Events</a>
     <a class="cart-link" href="/cart.html" aria-label="Shopping cart">
@@ -1740,12 +1781,23 @@
     // DISPLAY PRODUCTS
     // ==========================================
 
+    function getSafeProductImageUrl(value) {
+      if (typeof value !== "string" || !value.trim()) return null;
+      try {
+        const url = new URL(value, window.location.origin);
+        if (url.protocol !== "https:" && url.origin !== window.location.origin) return null;
+        return url.href;
+      } catch {
+        return null;
+      }
+    }
+
     function displayProducts(items) {
 
       const container =
         document.getElementById("listings");
 
-      container.innerHTML = "";
+      container.replaceChildren();
 
 
       if (!items || items.length === 0) {
@@ -1764,53 +1816,51 @@
           document.createElement("article");
 
         card.className = "card";
-
-
-        card.innerHTML = `
-
-          <div class="picture">
-            ${product.icon}
-          </div>
-
-          <div class="details">
-
-            <span class="tag">
-              ${product.category}
-            </span>
-
-            <h3>
-              ${product.name}
-            </h3>
-
-            <p class="college-label">
-              🎓 ${product.college || "College not specified"}
-            </p>
-
-            <p>
-              ${product.description}
-            </p>
-
-            <div class="price">
-              ₹${product.price}
-            </div>
-
-            ${currentUser ? `
-              <button onclick="addToCart(${product.id})">
-                Add to Cart
-              </button>
-            ` : ""}
-
-            <button
-              onclick="buyItem(${product.id})"
-            >
-              View / Buy
-            </button>
-
-          </div>
-
-        `;
-
-
+        const picture = document.createElement("div");
+        picture.className = "picture";
+        const imageUrl = getSafeProductImageUrl(product.image_url);
+        if (imageUrl) {
+          const image = document.createElement("img");
+          image.src = imageUrl;
+          image.alt = product.name || "Product image";
+          image.loading = "lazy";
+          image.onerror = () => {
+            image.remove();
+            picture.textContent = product.icon || "📦";
+          };
+          picture.appendChild(image);
+        } else {
+          picture.textContent = product.icon || "📦";
+        }
+        const details = document.createElement("div");
+        details.className = "details";
+        const tag = document.createElement("span");
+        tag.className = "tag";
+        tag.textContent = product.category || "Campus essential";
+        const name = document.createElement("h3");
+        name.textContent = product.name || "Campus item";
+        const college = document.createElement("p");
+        college.className = "college-label";
+        college.textContent = `🎓 ${product.college || "College not specified"}`;
+        const description = document.createElement("p");
+        description.textContent = product.description || "No description provided.";
+        const price = document.createElement("div");
+        price.className = "price";
+        price.textContent = `₹${product.price}`;
+        details.append(tag, name, college, description, price);
+        if (currentUser) {
+          const addButton = document.createElement("button");
+          addButton.type = "button";
+          addButton.textContent = "Add to Cart";
+          addButton.addEventListener("click", () => addToCart(product.id));
+          details.appendChild(addButton);
+        }
+        const buyButton = document.createElement("button");
+        buyButton.type = "button";
+        buyButton.textContent = "View / Buy";
+        buyButton.addEventListener("click", () => buyItem(product.id));
+        details.appendChild(buyButton);
+        card.append(picture, details);
         container.appendChild(card);
 
       });
@@ -2139,10 +2189,16 @@ function contactSeller(productId) {
         card.className = "home-product-card";
         const image = document.createElement("div");
         image.className = "home-product-image";
-        if (product.image_url) {
+        const imageUrl = getSafeProductImageUrl(product.image_url);
+        if (imageUrl) {
           const imageElement = document.createElement("img");
-          imageElement.src = product.image_url;
+          imageElement.src = imageUrl;
           imageElement.alt = product.name || "Product image";
+          imageElement.loading = "lazy";
+          imageElement.onerror = () => {
+            imageElement.remove();
+            image.textContent = product.icon || "📦";
+          };
           image.appendChild(imageElement);
         } else {
           image.textContent = product.icon || "📦";
@@ -2334,6 +2390,23 @@ function contactSeller(productId) {
     loadHomepagePreviews();
 
 
+    const mobileMenuToggle = document.getElementById("mobileMenuToggle");
+    const mainNavigation = document.getElementById("mainNavigation");
+    mobileMenuToggle.addEventListener("click", () => {
+      const isOpen = mainNavigation.dataset.mobileOpen === "true";
+      mainNavigation.dataset.mobileOpen = String(!isOpen);
+      mobileMenuToggle.setAttribute("aria-expanded", String(!isOpen));
+      mobileMenuToggle.setAttribute("aria-label", isOpen ? "Open navigation menu" : "Close navigation menu");
+      mobileMenuToggle.textContent = isOpen ? "☰" : "✕";
+    });
+    mainNavigation.addEventListener("click", event => {
+      if (event.target.closest("a")) {
+        mainNavigation.dataset.mobileOpen = "false";
+        mobileMenuToggle.setAttribute("aria-expanded", "false");
+        mobileMenuToggle.setAttribute("aria-label", "Open navigation menu");
+        mobileMenuToggle.textContent = "☰";
+      }
+    });
   </script>
 
 </body>

@@ -36,12 +36,21 @@
     .card button, .search button { background: var(--navy); }
     .card button:hover, .search button:hover { background: var(--blue); }
     @media (max-width: 700px) { header nav { width: 100%; } main { padding-top: 28px; } }
+    .mobile-menu-toggle { display: none; }
+    @media (max-width: 700px) {
+      .mobile-menu-toggle { display: inline-flex; background: transparent; border: 1px solid #ffffff55; }
+      header { align-items: center; }
+      header nav { display: none; width: 100%; }
+      header nav[data-mobile-open="true"] { display: flex; flex-direction: column; align-items: stretch; }
+      header nav[data-mobile-open="true"] a { width: 100%; }
+    }
   </style>
 </head>
 <body>
   <header>
     <h1>Campus<span>Loop</span> AI</h1>
-    <nav>
+    <button id="mobileMenuToggle" class="mobile-menu-toggle" type="button" aria-expanded="false" aria-controls="mainNavigation" aria-label="Open navigation menu">☰</button>
+    <nav id="mainNavigation" data-mobile-open="false" aria-label="Main navigation">
       <a href="/index.html">Home</a>
       <a href="/products.html">Marketplace</a>
       <a href="/events.html">Events</a>
@@ -93,6 +102,16 @@
       updateCartCount();
       message.textContent = "Item added to your cart.";
     }
+    function getSafeImageUrl(value) {
+      if (typeof value !== "string" || !value.trim()) return null;
+      try {
+        const url = new URL(value, window.location.origin);
+        if (url.protocol !== "https:" && url.origin !== window.location.origin) return null;
+        return url.href;
+      } catch {
+        return null;
+      }
+    }
     function renderProducts(products) {
       listingContainer.replaceChildren();
       if (!products.length) {
@@ -103,11 +122,40 @@
       products.forEach(product => {
         const card = document.createElement("article");
         card.className = "card";
-        const image = product.image_url
-          ? `<img src="${product.image_url}" alt="${product.name}">`
-          : (product.icon || "📦");
-        card.innerHTML = `<div class="picture">${image}</div><div class="details"><span class="tag">${product.category}</span><h3>${product.name}</h3><p>${product.description || "No description provided."}</p><div class="price">₹${product.price}</div><button type="button">Add to Cart</button></div>`;
-        card.querySelector("button").addEventListener("click", () => addToCart(product.id));
+        const picture = document.createElement("div");
+        picture.className = "picture";
+        const imageUrl = getSafeImageUrl(product.image_url);
+        if (imageUrl) {
+          const image = document.createElement("img");
+          image.src = imageUrl;
+          image.alt = product.name || "Product image";
+          image.loading = "lazy";
+          image.onerror = () => {
+            image.remove();
+            picture.textContent = product.icon || "📦";
+          };
+          picture.appendChild(image);
+        } else {
+          picture.textContent = product.icon || "📦";
+        }
+        const details = document.createElement("div");
+        details.className = "details";
+        const tag = document.createElement("span");
+        tag.className = "tag";
+        tag.textContent = product.category || "Campus essential";
+        const name = document.createElement("h3");
+        name.textContent = product.name || "Campus item";
+        const description = document.createElement("p");
+        description.textContent = product.description || "No description provided.";
+        const price = document.createElement("div");
+        price.className = "price";
+        price.textContent = `₹${product.price}`;
+        const button = document.createElement("button");
+        button.type = "button";
+        button.textContent = "Add to Cart";
+        button.addEventListener("click", () => addToCart(product.id));
+        details.append(tag, name, description, price, button);
+        card.append(picture, details);
         listingContainer.appendChild(card);
       });
     }
@@ -140,6 +188,23 @@
     if (["Books", "Electronics", "Lab"].includes(initialCategory)) document.getElementById("category").value = initialCategory;
     updateCartCount();
     checkSession().finally(loadProducts);
+    const mobileMenuToggle = document.getElementById("mobileMenuToggle");
+    const mainNavigation = document.getElementById("mainNavigation");
+    mobileMenuToggle.addEventListener("click", () => {
+      const isOpen = mainNavigation.dataset.mobileOpen === "true";
+      mainNavigation.dataset.mobileOpen = String(!isOpen);
+      mobileMenuToggle.setAttribute("aria-expanded", String(!isOpen));
+      mobileMenuToggle.setAttribute("aria-label", isOpen ? "Open navigation menu" : "Close navigation menu");
+      mobileMenuToggle.textContent = isOpen ? "☰" : "✕";
+    });
+    mainNavigation.addEventListener("click", event => {
+      if (event.target.closest("a")) {
+        mainNavigation.dataset.mobileOpen = "false";
+        mobileMenuToggle.setAttribute("aria-expanded", "false");
+        mobileMenuToggle.setAttribute("aria-label", "Open navigation menu");
+        mobileMenuToggle.textContent = "☰";
+      }
+    });
   </script>
 </body>
 </html>

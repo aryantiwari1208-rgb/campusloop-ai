@@ -106,13 +106,22 @@
     .tag { background: #ddf3e5; color: #23613e; }
     .event-meta, .event-description { color: var(--muted); }
     @media (max-width: 700px) { header > div { display: none; } header nav { width: 100%; } main { padding-top: 28px; } }
+    .mobile-menu-toggle { display: none; }
+    @media (max-width: 700px) {
+      .mobile-menu-toggle { display: inline-flex; background: transparent; border: 1px solid #ffffff55; }
+      header { align-items: center; }
+      header nav { display: none; }
+      header nav[data-mobile-open="true"] { display: flex; flex-direction: column; align-items: stretch; width: 100%; }
+      header nav[data-mobile-open="true"] a { width: 100%; }
+    }
   </style>
 </head>
 <body>
   <header>
     <h1>Campus<span>Loop</span> AI</h1>
     <div>Student Marketplace · Buy Smart, Reuse More</div>
-    <nav aria-label="Main navigation">
+    <button id="mobileMenuToggle" class="mobile-menu-toggle" type="button" aria-expanded="false" aria-controls="mainNavigation" aria-label="Open navigation menu">☰</button>
+    <nav id="mainNavigation" data-mobile-open="false" aria-label="Main navigation">
       <a href="/products.html">Marketplace</a>
       <a href="/events.html">Events</a>
       <a href="/people.html">Campus Directory</a>
@@ -212,6 +221,23 @@
         ? cart.reduce((total, item) => total + (Number.isInteger(item.quantity) ? item.quantity : 0), 0)
         : 0;
     } catch {}
+    const mobileMenuToggle = document.getElementById("mobileMenuToggle");
+    const mainNavigation = document.getElementById("mainNavigation");
+    mobileMenuToggle.addEventListener("click", () => {
+      const isOpen = mainNavigation.dataset.mobileOpen === "true";
+      mainNavigation.dataset.mobileOpen = String(!isOpen);
+      mobileMenuToggle.setAttribute("aria-expanded", String(!isOpen));
+      mobileMenuToggle.setAttribute("aria-label", isOpen ? "Open navigation menu" : "Close navigation menu");
+      mobileMenuToggle.textContent = isOpen ? "☰" : "✕";
+    });
+    mainNavigation.addEventListener("click", event => {
+      if (event.target.closest("a")) {
+        mainNavigation.dataset.mobileOpen = "false";
+        mobileMenuToggle.setAttribute("aria-expanded", "false");
+        mobileMenuToggle.setAttribute("aria-label", "Open navigation menu");
+        mobileMenuToggle.textContent = "☰";
+      }
+    });
   </script>
 </body>
 </html>
