@@ -6,43 +6,122 @@
   <title>Checkout · CampusLoop AI</title>
   <style>
     * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      font-family: Arial, sans-serif;
-      background: #f5f7fb;
-      color: #17233c;
-      min-height: 100vh;
-      display: grid;
-      place-items: center;
-      padding: 24px;
-    }
-    .panel {
-      width: min(100%, 560px);
-      padding: 32px;
-      border-radius: 16px;
-      background: white;
-      box-shadow: 0 8px 30px #17233c14;
-      text-align: center;
-    }
-    .panel h1 { margin-top: 0; }
-    .panel p { color: #65718a; line-height: 1.6; }
-    .button {
-      display: inline-block;
-      padding: 13px;
-      border-radius: 9px;
-      background: #087f68;
-      color: white;
-      font-weight: bold;
-      text-decoration: none;
-    }
-    .button:hover { background: #066b58; }
+    :root { --navy: #10234e; --blue: #294b87; --ink: #14213d; --muted: #64748b; --line: #dce4f2; }
+    body { margin: 0; min-height: 100vh; padding: 24px; display: grid; place-items: center; background: #f3f6fc; color: var(--ink); font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
+    .panel { width: min(100%, 560px); padding: 32px; border: 1px solid var(--line); border-radius: 14px; background: #fff; box-shadow: 0 12px 30px #10234e12; }
+    h1 { margin-top: 0; color: var(--navy); }
+    p { color: var(--muted); line-height: 1.6; }
+    #orderSummary { padding: 16px; border: 1px solid var(--line); border-radius: 10px; background: #f3f6fc; }
+    #paypalButton { margin-top: 20px; }
+    .button { display: inline-block; padding: 12px 16px; border-radius: 8px; background: var(--navy); color: #fff; font-weight: 700; text-decoration: none; }
+    .button:hover { background: var(--blue); }
+    .message { min-height: 24px; }
+    .error { color: #b42318; }
+    .success { color: #23613e; }
+    [hidden] { display: none !important; }
   </style>
 </head>
 <body>
   <main class="panel">
-    <h1>Checkout</h1>
-    <p>Payment integration is coming soon. No payment details are collected on this page.</p>
+    <h1>Secure checkout</h1>
+    <p>Complete this hackathon demo payment using PayPal Sandbox. No live money is charged.</p>
+    <div id="orderSummary">Loading your order...</div>
+    <p id="message" class="message" role="status" aria-live="polite"></p>
+    <div id="paypalButton"></div>
     <a class="button" href="/cart.html">← Back to Cart</a>
   </main>
+  <script>
+    const cartStorageKey = "campusloop.cart";
+    const summary = document.getElementById("orderSummary");
+    const message = document.getElementById("message");
+    const paypalButton = document.getElementById("paypalButton");
+
+    function readCart() {
+      try {
+        const cart = JSON.parse(localStorage.getItem(cartStorageKey) || "[]");
+        return Array.isArray(cart)
+          ? cart.filter(item => Number.isSafeInteger(item?.id) && item.id > 0 &&
+              Number.isSafeInteger(item.quantity) && item.quantity > 0 && item.quantity <= 99)
+          : [];
+      } catch {
+        return [];
+      }
+    }
+
+    function money(value) {
+      return `₹${Number(value).toLocaleString("en-IN", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      })}`;
+    }
+
+    function showError(text) {
+      message.className = "message error";
+      message.textContent = text;
+    }
+
+    async function loadPayPal() {
+      const cart = readCart();
+      if (!cart.length) {
+        summary.textContent = "Your cart is empty.";
+        return;
+      }
+      const productsResponse = await fetch("/api/products");
+      const productsData = await productsResponse.json();
+      if (!productsResponse.ok) throw new Error(productsData.message || "Could not load your cart.");
+      const products = productsData.products || [];
+      const lines = cart.map(item => {
+        const product = products.find(entry => entry.id === item.id);
+        return product ? { ...item, product, subtotal: Number(product.price) * item.quantity } : null;
+      }).filter(Boolean);
+      if (lines.length !== cart.length) throw new Error("Some cart items are no longer available.");
+      const total = lines.reduce((sum, line) => sum + line.subtotal, 0);
+      summary.textContent = `${lines.length} item${lines.length === 1 ? "" : "s"} · Total ${money(total)}`;
+
+      const configResponse = await fetch("/api/paypal/config");
+      const config = await configResponse.json();
+      if (!configResponse.ok) throw new Error(config.message || "PayPal Sandbox is not configured.");
+      const script = document.createElement("script");
+      script.src = `https://www.paypal.com/sdk/js?client-id=${encodeURIComponent(config.clientId)}&currency=${config.currency}&intent=capture`;
+      script.onload = () => {
+        window.paypal.Buttons({
+          createOrder: async () => {
+            const response = await fetch("/api/paypal/orders", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              credentials: "same-origin",
+              body: JSON.stringify({ items: readCart() })
+            });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.message || "Could not create the PayPal order.");
+            return data.orderId;
+          },
+          onApprove: async data => {
+            message.className = "message";
+            message.textContent = "Completing Sandbox payment...";
+            const response = await fetch(`/api/paypal/orders/${encodeURIComponent(data.orderID)}/capture`, {
+              method: "POST",
+              credentials: "same-origin"
+            });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.message || "Payment could not be completed.");
+            localStorage.removeItem(cartStorageKey);
+            summary.textContent = "Sandbox payment complete.";
+            message.className = "message success";
+            message.textContent = `Payment successful. Test order: ${result.orderId}`;
+            paypalButton.replaceChildren();
+          },
+          onError: error => showError(error?.message || "PayPal could not complete the payment.")
+        }).render("#paypalButton");
+      };
+      script.onerror = () => showError("Could not load PayPal Sandbox. Check your connection.");
+      document.head.appendChild(script);
+    }
+
+    loadPayPal().catch(error => {
+      console.error("Checkout error:", error);
+      showError(error.message || "Checkout is temporarily unavailable.");
+    });
+  </script>
 </body>
 </html>

@@ -73,6 +73,12 @@ if (process.env.NODE_ENV === "production") {
 
 const PORT = Number(process.env.PORT) || 3000;
 const websiteFolder = __dirname;
+const paypalEnvironment = process.env.PAYPAL_ENVIRONMENT === "live" ? "live" : "sandbox";
+const paypalApiBase = paypalEnvironment === "live"
+    ? "https://api-m.paypal.com"
+    : "https://api-m.sandbox.paypal.com";
+const paypalClientId = process.env.PAYPAL_CLIENT_ID || "";
+const paypalClientSecret = process.env.PAYPAL_CLIENT_SECRET || "";
 
 app.use(express.json({ limit: "8mb" }));
 app.use(express.urlencoded({ extended: true }));
@@ -92,6 +98,186 @@ app.get("/api/health", (req, res) => {
         message: "CampusLoop AI server is running!"
     });
 });
+
+    app.get("/api/paypal/config", (req, res) => {
+        if (!paypalClientId || !paypalClientSecret) {
+            return res.status(503).json({
+                status: "error",
+                message: "PayPal Sandbox is not configured yet."
+            });
+        }
+        return res.json({
+            status: "success",
+            clientId: paypalClientId,
+            environment: paypalEnvironment,
+            currency: "INR"
+        });
+    });
+
+    async function getPayPalAccessToken() {
+        const credentials = Buffer.from(`${paypalClientId}:${paypalClientSecret}`).toString("base64");
+        const response = await fetch(`${paypalApiBase}/v1/oauth2/token`, {
+            method: "POST",
+            headers: {
+                Authorization: `Basic ${credentials}`,
+                "Content-Type": "application/x-www-form-urlencoded"
+            },
+            body: "grant_type=client_credentials"
+        });
+        const data = await response.json();
+        if (!response.ok || !data.access_token) {
+            throw new Error(data.error_description || "PayPal authentication failed.");
+        }
+        return data.access_token;
+    }
+
+    function normalizePaymentItems(value) {
+        if (!Array.isArray(value) || value.length < 1 || value.length > 50) return null;
+        const items = [];
+        for (const item of value) {
+            if (!item || !Number.isSafeInteger(item.id) || item.id < 1 ||
+                !Number.isSafeInteger(item.quantity) || item.quantity < 1 || item.quantity > 99) {
+                return null;
+            }
+            const existing = items.find(entry => entry.id === item.id);
+            if (existing) existing.quantity = Math.min(99, existing.quantity + item.quantity);
+            else items.push({ id: item.id, quantity: item.quantity });
+        }
+        return items;
+    }
+
+    async function getPricedPaymentItems(items) {
+        const ids = items.map(item => item.id);
+        const { data, error } = await supabase
+            .from("products")
+            .select("id,name,price")
+            .in("id", ids)
+            .eq("college", marketplaceCollege);
+        if (error && missingCollegeColumn(error)) {
+            const legacyResult = await supabase
+                .from("products")
+                .select("id,name,price")
+                .in("id", ids);
+            if (legacyResult.error) throw legacyResult.error;
+            return legacyResult.data;
+        }
+        if (error) throw error;
+        return data;
+    }
+
+    app.post("/api/paypal/orders", async (req, res) => {
+        const authUser = await getAuthenticatedUser(req, res);
+        if (!authUser) {
+            return res.status(401).json({ status: "error", message: "Not authenticated." });
+        }
+        if (!paypalClientId || !paypalClientSecret) {
+            return res.status(503).json({ status: "error", message: "PayPal Sandbox is not configured yet." });
+        }
+        const items = normalizePaymentItems(req.body?.items);
+        if (!items) {
+            return res.status(400).json({ status: "error", message: "Your cart is invalid or empty." });
+        }
+
+        try {
+            const products = await getPricedPaymentItems(items);
+            const lineItems = items.map(item => {
+                const product = products.find(entry => entry.id === item.id);
+                const price = Number(product?.price);
+                if (!product || !Number.isInteger(price) || price < 0) {
+                    throw new Error("One or more cart items are no longer available.");
+                }
+                return {
+                    name: String(product.name || "Campus item").slice(0, 127),
+                    quantity: String(item.quantity),
+                    unit_amount: { currency_code: "INR", value: price.toFixed(2) },
+                    category: "PHYSICAL_GOODS"
+                };
+            });
+            const total = lineItems.reduce((sum, item) =>
+                sum + Number(item.unit_amount.value) * Number(item.quantity), 0);
+            const accessToken = await getPayPalAccessToken();
+            const response = await fetch(`${paypalApiBase}/v2/checkout/orders`, {
+                method: "POST",
+                headers: {
+                    Authorization: `Bearer ${accessToken}`,
+                    "Content-Type": "application/json",
+                    "PayPal-Request-Id": crypto.randomUUID()
+                },
+                body: JSON.stringify({
+                    intent: "CAPTURE",
+                    purchase_units: [{
+                        custom_id: authUser.id,
+                        amount: {
+                            currency_code: "INR",
+                            value: total.toFixed(2),
+                            breakdown: { item_total: { currency_code: "INR", value: total.toFixed(2) } }
+                        },
+                        items: lineItems
+                    }]
+                })
+            });
+            const data = await response.json();
+            if (!response.ok || !data.id) {
+                console.error("PayPal order creation error:", data);
+                return res.status(502).json({ status: "error", message: "PayPal could not create the order." });
+            }
+            return res.status(201).json({ status: "success", orderId: data.id });
+        } catch (error) {
+            console.error("PayPal order error:", error.message);
+            return res.status(502).json({ status: "error", message: error.message });
+        }
+    });
+
+    app.post("/api/paypal/orders/:orderId/capture", async (req, res) => {
+        const authUser = await getAuthenticatedUser(req, res);
+        if (!authUser) {
+            return res.status(401).json({ status: "error", message: "Not authenticated." });
+        }
+        if (!paypalClientId || !paypalClientSecret) {
+            return res.status(503).json({ status: "error", message: "PayPal Sandbox is not configured yet." });
+        }
+        const orderId = typeof req.params.orderId === "string" ? req.params.orderId.trim() : "";
+        if (!/^[A-Z0-9-]+$/i.test(orderId) || orderId.length > 80) {
+            return res.status(400).json({ status: "error", message: "Invalid PayPal order." });
+        }
+
+        try {
+            const accessToken = await getPayPalAccessToken();
+            const orderResponse = await fetch(`${paypalApiBase}/v2/checkout/orders/${encodeURIComponent(orderId)}`, {
+                headers: { Authorization: `Bearer ${accessToken}` }
+            });
+            const order = await orderResponse.json();
+            if (!orderResponse.ok || order.purchase_units?.[0]?.custom_id !== authUser.id) {
+                return res.status(403).json({ status: "error", message: "This PayPal order does not belong to your session." });
+            }
+            if (order.status !== "CREATED") {
+                return res.status(409).json({ status: "error", message: "This PayPal order is no longer available." });
+            }
+            const captureResponse = await fetch(`${paypalApiBase}/v2/checkout/orders/${encodeURIComponent(orderId)}/capture`, {
+                method: "POST",
+                headers: {
+                    Authorization: `Bearer ${accessToken}`,
+                    "Content-Type": "application/json",
+                    "PayPal-Request-Id": crypto.randomUUID()
+                },
+                body: "{}"
+            });
+            const capture = await captureResponse.json();
+            if (!captureResponse.ok || capture.status !== "COMPLETED") {
+                console.error("PayPal capture error:", capture);
+                return res.status(502).json({ status: "error", message: "PayPal could not complete the payment." });
+            }
+            return res.json({
+                status: "success",
+                message: "Sandbox payment completed successfully.",
+                orderId,
+                captureId: capture.purchase_units?.[0]?.payments?.captures?.[0]?.id || null
+            });
+        } catch (error) {
+            console.error("PayPal capture error:", error.message);
+            return res.status(502).json({ status: "error", message: "PayPal payment could not be completed." });
+        }
+    });
 
 app.get("/api/products", async (req, res) => {
     try {

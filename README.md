@@ -24,7 +24,7 @@ The project is being developed toward a more intelligent experience with AI-assi
 
 ✨ Current Features
 
-- Browse sample marketplace products.
+- Browse marketplace products.
 - Search for products.
 - Filter products by category.
 - Responsive marketplace interface.
@@ -36,8 +36,7 @@ The project is being developed toward a more intelligent experience with AI-assi
 - AI Listing Assistant: Generate clear product descriptions from basic item details.
 - AI Price Suggestions: Suggest listing prices based on product information.
 - Natural-Language Search: Help students find products using everyday language.
-- Database Integration: Planned for a future implementation.
-- PayPal Sandbox: Demonstrate a test checkout and payment workflow.
+- PayPal Sandbox checkout with server-side order creation and capture.
 - Seller Listings: Allow students to create and manage listings.
 
 These features are planned and should be marked complete only after they have been implemented and tested.
@@ -47,8 +46,8 @@ These features are planned and should be marked complete only after they have be
 - Frontend: HTML, CSS, JavaScript
 - Backend: Node.js, Express.js
 - Hosting: Render
-- Database: Not configured
-- Planned payments: PayPal Sandbox
+- Database: Supabase
+- Payments: PayPal Sandbox for hackathon testing
 - Planned AI: Free-tier AI API, subject to availability and usage limits
 
 🖥️ Run Locally
@@ -72,7 +71,15 @@ Setup
    
    npm install
 
-4. No environment variables are required for the current non-persistent version.
+4. Create a `.env` file with your Supabase values. For PayPal Sandbox checkout, also add:
+
+   ```
+   PAYPAL_CLIENT_ID=your_sandbox_client_id
+   PAYPAL_CLIENT_SECRET=your_sandbox_client_secret
+   PAYPAL_ENVIRONMENT=sandbox
+   ```
+
+   Never commit `.env` or share the PayPal client secret.
 
 5. Start the server:
    
@@ -84,7 +91,7 @@ Setup
 
 Make sure "index.html", "server.js", and "package.json" are in the expected locations. Adjust the commands if your repository uses a different folder structure.
 
-Marketplace listings, events, and authentication currently return HTTP 503 responses because persistent storage has been removed. The homepage, campus form, and recommendation assistant remain available.
+PayPal checkout is a Sandbox demonstration only. Payment orders are validated on the server against current product prices, and no payment records are stored in the database yet.
 
 🔒 Security
 
@@ -92,6 +99,7 @@ Marketplace listings, events, and authentication currently return HTTP 503 respo
 - Store secrets in environment variables.
 - Use PayPal Sandbox for test transactions during development.
 - Validate payment results on the server before marking an order as paid.
+- Keep `PAYPAL_CLIENT_SECRET` server-side; only the client ID is sent to the browser.
 
 🎯 Project Goal
 

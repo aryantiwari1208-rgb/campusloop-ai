@@ -82,7 +82,24 @@ test("cart and checkout pages load with local cart controls", async () => {
 
     const checkoutResponse = await fetch(`${baseUrl}/checkout.html`);
     assert.equal(checkoutResponse.status, 200);
-    assert.match(await checkoutResponse.text(), /payment integration is coming soon/i);
+    const checkoutPage = await checkoutResponse.text();
+    assert.match(checkoutPage, /paypalButton/);
+    assert.match(checkoutPage, /api\/paypal\/orders/);
+    assert.match(checkoutPage, /No live money is charged/);
+});
+
+test("PayPal configuration does not expose secrets", async () => {
+    const response = await fetch(`${baseUrl}/api/paypal/config`);
+    if (process.env.PAYPAL_CLIENT_ID && process.env.PAYPAL_CLIENT_SECRET) {
+        assert.equal(response.status, 200);
+        const body = await response.json();
+        assert.equal(body.environment, process.env.PAYPAL_ENVIRONMENT === "live" ? "live" : "sandbox");
+        assert.equal(body.currency, "INR");
+        assert.equal(body.clientSecret, undefined);
+    } else {
+        assert.equal(response.status, 503);
+        assert.match((await response.json()).message, /not configured/i);
+    }
 });
 
 test("homepage requires login before adding products to cart", async () => {
